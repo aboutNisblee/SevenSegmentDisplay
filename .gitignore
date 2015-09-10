@@ -1,0 +1,24 @@
+# OS
+/.directory
+
+# IDE
+/.project
+/.cproject
+/.settings
+/*.user
+/*.kdev4
+
+# build
+build/
+
+# Backup
+*.org
+*.orig
+*.bak
+
+# Testfiles
+*.sqlite
+
+# Output
+/bin
+/lib

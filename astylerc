@@ -1,0 +1,17 @@
+style=allman
+indent-preproc-define
+indent-col1-comments
+indent=tab=4
+max-code-length=120
+pad-oper
+pad-header
+unpad-paren
+align-pointer=type
+align-reference=type
+mode=c
+keep-one-line-blocks
+# Note: The following statement disables backups.
+# This schould not be a problem since in case of errors
+# one can restore the file from git
+# or simply use the undo command when started from an editor.
+suffix=none
