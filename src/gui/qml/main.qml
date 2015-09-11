@@ -3,8 +3,9 @@ import QtQuick.Window 2.2
 import de.nisble 1.0
 
 Window {
+    id: root
     visible: true
-    width: 300
+    width: 600
     height: 500
 
     MouseArea {
@@ -13,13 +14,55 @@ Window {
         onDoubleClicked: Qt.quit()
     }
 
-    SevenSegmentDisplay {
-        id: digit
-        anchors {
-            top: parent.top
-            bottom: parent.bottom
+    Row {
+        anchors.fill: parent
+
+        SevenSegmentDisplay {
+            id: digit
+            anchors {
+                top: parent.top
+                bottom: parent.bottom
+            }
+            width: parent.width / 2
+
+            digitSize: 120
+            verticalAlignment: SevenSegmentDisplay.AlignCenter
+            horizontalAlignment: SevenSegmentDisplay.AlignCenter
+
+            value: 0
         }
-        value: 0
+
+        Column {
+            anchors {
+                top: parent.top
+                bottom: parent.bottom
+            }
+            width: parent.width / 2
+
+            SevenSegmentDisplay {
+                id: digit2
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                }
+                height: parent.height / 2
+                digitSize: 60
+                value: 0
+            }
+
+            Text {
+                id: text
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                }
+                height: parent.height / 2
+                font.pointSize: 60
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                text: qsTr("0")
+            }
+        }
     }
 
     Timer {
@@ -31,6 +74,8 @@ Window {
         onTriggered: {
             i = (i + 1) % 10
             digit.value = i
+            digit2.value = i
+            text.text = i
         }
     }
 }

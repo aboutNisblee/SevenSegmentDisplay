@@ -18,6 +18,9 @@
 struct DigitNodeSettings
 {
 	int mValue = 0;
+	int mDigitSize = 24;
+	SevenSegmentDisplay::Alignment mVAlignment = SevenSegmentDisplay::AlignCenter;
+	SevenSegmentDisplay::Alignment mHAlignment = SevenSegmentDisplay::AlignCenter;
 	QColor mBgColor = QColor("black");
 	QColor mOnColor = QColor("green");
 	QColor mOffColor = QColor("gray");
@@ -27,9 +30,11 @@ namespace
 {
 
 // XXX: Configurable??
-/* Length and width of a segment in un-scaled coordinate system. */
-constexpr qreal baseLength = 2.0;
-constexpr qreal baseWidth = 0.45;
+/* Sizes in un-scaled coordinate system. */
+constexpr qreal baseSegLength = 2.0;
+constexpr qreal baseSegWidth = 0.60;
+constexpr qreal baseSegGap = 0.45 / 10;
+constexpr qreal baseDigitHeight = 2 * baseSegLength + baseSegWidth + 4 * baseSegGap;
 
 /** \internal Scene graph geometry node of a single segment. */
 struct SegmentNode: public QSGGeometryNode
@@ -51,13 +56,18 @@ struct SegmentNode: public QSGGeometryNode
 	inline SegmentNode& reset()
 	{
 		/* Vertices are placed in the center of a 2-dimensional coordinate system to simplify initial rotation.
-		 * The y values are increasing downwards to ease mapping to Quicks coordinate system. */
-		mV[0] = { -baseLength / 2, 0};
-		mV[1] = { -baseLength / 2 + baseWidth / 2, baseWidth / 2};
-		mV[2] = { -baseLength / 2 + baseWidth / 2, -baseWidth / 2};
-		mV[3] = {baseLength / 2 - baseWidth / 2, baseWidth / 2};
-		mV[4] = {baseLength / 2 - baseWidth / 2, -baseWidth / 2};
-		mV[5] = {baseLength / 2, 0};
+		 * The y values are increasing downwards to ease mapping to Quicks coordinate system.
+		 *   /v2---------v4\
+		 * v0               v5
+		 *   \v1---------v3/
+		 * */
+
+		mV[0] = { -baseSegLength / 2, 0};
+		mV[1] = { -baseSegLength / 2 + baseSegWidth / 2, baseSegWidth / 2};
+		mV[2] = { -baseSegLength / 2 + baseSegWidth / 2, -baseSegWidth / 2};
+		mV[3] = {baseSegLength / 2 - baseSegWidth / 2, baseSegWidth / 2};
+		mV[4] = {baseSegLength / 2 - baseSegWidth / 2, -baseSegWidth / 2};
+		mV[5] = {baseSegLength / 2, 0};
 		return *this;
 	}
 
@@ -73,13 +83,31 @@ struct SegmentNode: public QSGGeometryNode
 	/** \internal Update the geometry by mapping the current segment into the coordinate system of the given matrix. */
 	inline void updateGeometry(const QMatrix& trans)
 	{
+		bool dirty = false;
 		QSGGeometry::Point2D* data = mGeo->vertexDataAsPoint2D();
 		for (int i = 0; i < mGeo->vertexCount(); ++i)
 		{
+			// QPointF is is actually QPointDouble! So take care in comparisons!
 			QPointF p = trans.map(mV[i]);
-			data[i].set(p.x(), p.y());
+			float pX = static_cast<float>(p.x());
+			float pY = static_cast<float>(p.y());
+			if (pX != data[i].x || pY != data[i].y)
+			{
+				data[i].set(pX, pY);
+				dirty = true;
+				//				qDebug() << "Dirty!";
+			}
 		}
-		markDirty(QSGNode::DirtyGeometry);
+
+		if (dirty)
+			markDirty(QSGNode::DirtyGeometry);
+	}
+
+	inline QPointF getEffectiveVertex(qint8 no)
+	{
+		if (no < mGeo->vertexCount())
+			return QPointF(mGeo->vertexDataAsPoint2D()[no].x, mGeo->vertexDataAsPoint2D()[no].y);
+		return QPointF();
 	}
 
 	/** \internal Update the forground color of the segment. */
@@ -142,34 +170,74 @@ public:
 	 * Things are only updated when the settings differ from last call.
 	 * @param rectangle The current binding rectangle of the caller.
 	 */
-	void update(const QRectF& rectangle)
+	QRectF update(const QRectF& bound)
 	{
-		// Geometry
-		// XXX: Remember to also check for segment geometry changes, when made it configurable!
-		if (rect() != rectangle)
+		QRectF resultingRect = bound;
+
+		// FIXME: Not optimal! Some of the values aren't needed to recalculate on each update!
+
+		// Calculate needed scale to match requested digit size
+		qreal scale = mSettings->mDigitSize / baseDigitHeight;
+		// Scale all segment sizes, needed for positioning
+		qreal segWidth = baseSegWidth * scale;
+		qreal segLength = baseSegLength * scale;
+		qreal segGap = baseSegGap * scale;
+		// Create a scale matrix, needed to scale basic vertices
+		QMatrix matScale = QMatrix().scale(scale, scale);
+
+		// If layout isn't specified by client, set it!
+		if (resultingRect.width() <= 0)
+			resultingRect.setWidth((segLength + segWidth + 2 * segGap) * 1.4); // TODO: Add LRMargins
+		if (resultingRect.height() <= 0)
+			resultingRect.setHeight(mSettings->mDigitSize * 1.4); // TODO: Add TBMargins
+
+		// Update rectangle of the background
+		if (rect() != resultingRect)
 		{
-			setRect(rectangle);
+			setRect(resultingRect);
 			markDirty(QSGNode::DirtyGeometry);
-
-			QPointF center(rectangle.width() / 2 * 0.8, rectangle.height() / 2);
-			qreal width = rectangle.width() * 0.4;
-			qreal scale = width / baseLength;
-			// Set scale for all segments
-			QMatrix matScale = QMatrix().scale(scale, scale);
-			qreal gap = baseWidth / 10 * scale;
-
-			mSegments[0]->updateGeometry(matScale * QMatrix().translate(center.x(), center.y() - baseLength * scale - gap * 2));
-			mSegments[1]->updateGeometry(matScale * QMatrix().translate(center.x() + width / 2 + gap,
-			                             center.y() - baseLength / 2 * scale - gap));
-			mSegments[2]->updateGeometry(matScale * QMatrix().translate(center.x() + width / 2 + gap,
-			                             center.y() + baseLength / 2 * scale + gap));
-			mSegments[3]->updateGeometry(matScale * QMatrix().translate(center.x(), center.y() + baseLength * scale + gap * 2));
-			mSegments[4]->updateGeometry(matScale * QMatrix().translate(center.x() - width / 2 - gap,
-			                             center.y() + baseLength / 2 * scale + gap));
-			mSegments[5]->updateGeometry(matScale * QMatrix().translate(center.x() - width / 2 - gap,
-			                             center.y() - baseLength / 2 * scale - gap));
-			mSegments[6]->updateGeometry(matScale * QMatrix().translate(center.x(), center.y()));
 		}
+
+		qreal digitCenterX = 0;
+		qreal digitCenterY = 0;
+
+		switch (mSettings->mHAlignment)
+		{
+		case SevenSegmentDisplay::AlignCenter:
+			digitCenterX = resultingRect.center().x();
+			break;
+		}
+
+		switch (mSettings->mVAlignment)
+		{
+		case SevenSegmentDisplay::AlignCenter:
+			digitCenterY = resultingRect.center().y();
+			break;
+		}
+
+		// (A) top
+		mSegments[0]->updateGeometry(matScale * QMatrix().translate(digitCenterX, digitCenterY - segLength - segGap * 2));
+		// (B) top right
+		mSegments[1]->updateGeometry(matScale * QMatrix().translate(digitCenterX + segLength / 2 + segGap,
+		                             digitCenterY - segLength / 2 - segGap));
+		// (C) bottom right
+		mSegments[2]->updateGeometry(matScale * QMatrix().translate(digitCenterX + segLength / 2 + segGap,
+		                             digitCenterY + segLength / 2 + segGap));
+		// (D) bottom
+		mSegments[3]->updateGeometry(matScale * QMatrix().translate(digitCenterX, digitCenterY + segLength + segGap * 2));
+		// (E) bottom left
+		mSegments[4]->updateGeometry(matScale * QMatrix().translate(digitCenterX - segLength / 2 - segGap,
+		                             digitCenterY + segLength / 2 + segGap));
+		// (F) top left
+		mSegments[5]->updateGeometry(matScale * QMatrix().translate(digitCenterX - segLength / 2 - segGap,
+		                             digitCenterY - segLength / 2 - segGap));
+		// (G) middle
+		mSegments[6]->updateGeometry(matScale * QMatrix().translate(digitCenterX, digitCenterY));
+
+#if 0
+		qDebug() << "Effective digit size:" << mSegments[3]->getEffectiveVertex(1).y() - mSegments[0]->getEffectiveVertex(
+		             2).y();
+#endif
 
 		/* Background color
 		 * This will only mark the material dirty when color differs from current one. */
@@ -195,6 +263,8 @@ public:
 		{
 			qWarning() << "Invalid value" << mSettings->mValue;
 		}
+
+		return resultingRect;
 	}
 
 private:
@@ -220,16 +290,8 @@ SevenSegmentDisplay::SevenSegmentDisplay(QQuickItem* parent) :
 
 	setFlag(ItemHasContents, true);
 
-	connect(this, &QQuickItem::widthChanged, this, [&]()
-	{
-		if (height() / width() != 4 / 3)
-			setHeight(width() / 3 * 4);
-	});
-	connect(this, &QQuickItem::heightChanged, this, [&]()
-	{
-		if (height() / width() != 4 / 3)
-			setWidth(height() / 4 * 3);
-	});
+	//	connect(this, &QQuickItem::widthChanged, this, [&]() { qDebug() << "width:" << width(); });
+	//	connect(this, &QQuickItem::heightChanged, this, [&]() { qDebug() << "height:" << height(); });
 }
 
 int SevenSegmentDisplay::getValue() const { return mDigitSettings->mValue; }
@@ -240,6 +302,39 @@ void SevenSegmentDisplay::setValue(int value)
 		mDigitSettings->mValue = value;
 		update();
 		emit valueChanged();
+	}
+}
+
+int SevenSegmentDisplay::getDigitSize() const { return mDigitSettings->mDigitSize; }
+void SevenSegmentDisplay::setDigitSize(int size)
+{
+	if (mDigitSettings->mDigitSize != size)
+	{
+		mDigitSettings->mDigitSize = size;
+		update();
+		emit digitSizeChanged();
+	}
+}
+
+SevenSegmentDisplay::Alignment SevenSegmentDisplay::getVerticalAlignment() const { return mDigitSettings->mVAlignment; }
+void SevenSegmentDisplay::setVerticalAlignment(Alignment alignment)
+{
+	if (mDigitSettings->mVAlignment != alignment)
+	{
+		mDigitSettings->mVAlignment = alignment;
+		update();
+		emit verticalAlignmentChanged();
+	}
+}
+
+SevenSegmentDisplay::Alignment SevenSegmentDisplay::getHorizontalAlignment() const { return mDigitSettings->mHAlignment; }
+void SevenSegmentDisplay::setHorizontalAlignment(Alignment alignment)
+{
+	if (mDigitSettings->mHAlignment != alignment)
+	{
+		mDigitSettings->mHAlignment = alignment;
+		update();
+		emit horizontalAlignmentChanged();
 	}
 }
 
@@ -286,6 +381,11 @@ QSGNode* SevenSegmentDisplay::updatePaintNode(QSGNode* oldRoot, QQuickItem::Upda
 	}
 
 	// Update digit and all its children, based on values in mDigitSettings.
-	digit->update(boundingRect());
+	QRectF resultingRect = digit->update(boundingRect());
+
+	// Use the returned size as implicit item sizes (imitate behavior of QQuicks Text item).
+	setImplicitWidth(resultingRect.width());
+	setImplicitHeight(resultingRect.height());
+
 	return digit;
 }

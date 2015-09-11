@@ -23,7 +23,16 @@ class SevenSegmentDisplay : public QQuickItem
 	/** Property that controls the current value shown by the widget.
 	 * @note Currently only values from 0 to 9 are supported. */
 	Q_PROPERTY(int value READ getValue WRITE setValue NOTIFY valueChanged)
-    /** Property that controls the background color. */
+    /** Property that controls the digit height. */
+	Q_PROPERTY(int digitSize READ getDigitSize WRITE setDigitSize NOTIFY digitSizeChanged)
+
+	Q_ENUMS(Alignment)
+	/** Property that controls the vertical alignment. */
+	Q_PROPERTY(Alignment verticalAlignment READ getVerticalAlignment WRITE setVerticalAlignment NOTIFY verticalAlignmentChanged)
+	/** Property that controls the horizontal alignment. */
+	Q_PROPERTY(Alignment horizontalAlignment READ getHorizontalAlignment WRITE setHorizontalAlignment NOTIFY horizontalAlignmentChanged)
+
+	/** Property that controls the background color. */
 	Q_PROPERTY(QColor bgColor READ getBgColor WRITE setBgColor NOTIFY bgColorChanged)
 	/** Property that controls the color of enabled segments. */
 	Q_PROPERTY(QColor onColor READ getOnColor WRITE setOnColor NOTIFY onColorChanged)
@@ -31,10 +40,22 @@ class SevenSegmentDisplay : public QQuickItem
 	Q_PROPERTY(QColor offColor READ getOffColor WRITE setOffColor NOTIFY offColorChanged)
 
 public:
+	enum Alignment
+	{
+		// TODO: Add some other alignments
+		AlignCenter,
+	};
+
     SevenSegmentDisplay(QQuickItem* parent = nullptr);
 
     int getValue() const;
     void setValue(int value);
+    int getDigitSize() const;
+    void setDigitSize(int size);
+    Alignment getVerticalAlignment() const;
+    void setVerticalAlignment(Alignment alignment);
+    Alignment getHorizontalAlignment() const;
+    void setHorizontalAlignment(Alignment alignment);
     QColor getBgColor() const;
     void setBgColor(const QColor& color);
     QColor getOnColor() const;
@@ -44,6 +65,9 @@ public:
 
 signals:
 	void valueChanged();
+	void digitSizeChanged();
+	void verticalAlignmentChanged();
+	void horizontalAlignmentChanged();
 	void bgColorChanged();
 	void onColorChanged();
 	void offColorChanged();
