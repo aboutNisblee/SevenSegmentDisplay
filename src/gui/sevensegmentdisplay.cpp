@@ -19,6 +19,7 @@ struct DigitNodeSettings
 {
 	int mValue = 0;
 	int mDigitSize = 24;
+	bool dot = false;
 	SevenSegmentDisplay::Alignment mVAlignment = SevenSegmentDisplay::AlignCenter;
 	SevenSegmentDisplay::Alignment mHAlignment = SevenSegmentDisplay::AlignCenter;
 	QColor mBgColor = QColor("black");
@@ -36,22 +37,56 @@ constexpr qreal baseSegWidth = 0.60;
 constexpr qreal baseSegGap = 0.45 / 10;
 constexpr qreal baseDigitHeight = 2 * baseSegLength + baseSegWidth + 4 * baseSegGap;
 
+constexpr qreal baseDotRadius = baseSegWidth * 0.6;
+constexpr quint8 dotSegs = 24;
+
+template<int count>
+class ElementNode: public QSGGeometryNode
+{
+public:
+	virtual ~ElementNode() {}
+	/** \internal Rotate the element. */
+	inline ElementNode& rotate(qreal deg)
+	{
+		QMatrix m = QMatrix().rotate(deg);
+		for (QPointF& v : mV)
+			v = m.map(v);
+		return *this;
+	}
+	inline QPointF getEffectiveVertex(qint8 no)
+	{
+		if (no < mGeo->vertexCount())
+			return QPointF(mGeo->vertexDataAsPoint2D()[no].x, mGeo->vertexDataAsPoint2D()[no].y);
+		return QPointF();
+	}
+	/** \internal Update the foreground color of the element. */
+	inline void setColor(const QColor& color)
+	{
+		if (mMat->color() != color)
+		{
+			mMat->setColor(color);
+			markDirty(QSGNode::DirtyMaterial);
+		}
+	}
+	virtual void updateGeometry(const QMatrix& trans) = 0;
+protected:
+	std::array<QPointF, count> mV;
+	std::unique_ptr<QSGGeometry> mGeo;
+	std::unique_ptr<QSGFlatColorMaterial> mMat;
+};
+
 /** \internal Scene graph geometry node of a single segment. */
-struct SegmentNode: public QSGGeometryNode
+struct SegmentNode: public ElementNode<6>
 {
 	SegmentNode()
 	{
 		mGeo = std::unique_ptr<QSGGeometry>(new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), mV.size()));
 		mGeo->setDrawingMode(GL_TRIANGLE_STRIP);
 		setGeometry(mGeo.get());
-
 		mMat = std::unique_ptr<QSGFlatColorMaterial>(new QSGFlatColorMaterial);
-		mMat->setColor(QColor("green"));
 		setMaterial(mMat.get());
-
 		reset();
 	}
-
 	/** \internal Reset the segment to its initial state. */
 	inline SegmentNode& reset()
 	{
@@ -61,7 +96,6 @@ struct SegmentNode: public QSGGeometryNode
 		 * v0               v5
 		 *   \v1---------v3/
 		 * */
-
 		mV[0] = { -baseSegLength / 2, 0};
 		mV[1] = { -baseSegLength / 2 + baseSegWidth / 2, baseSegWidth / 2};
 		mV[2] = { -baseSegLength / 2 + baseSegWidth / 2, -baseSegWidth / 2};
@@ -70,16 +104,50 @@ struct SegmentNode: public QSGGeometryNode
 		mV[5] = {baseSegLength / 2, 0};
 		return *this;
 	}
-
-	/** \internal Rotate the segment. */
-	inline SegmentNode& rotate(qreal deg)
+	/** \internal Update the geometry by mapping the current segment into the coordinate system of the given matrix. */
+	inline void updateGeometry(const QMatrix& trans)
 	{
-		QMatrix m = QMatrix().rotate(deg);
-		for (QPointF& v : mV)
-			v = m.map(v);
+		bool dirty = false;
+		QSGGeometry::Point2D* data = mGeo->vertexDataAsPoint2D();
+		for (int i = 0; i < mGeo->vertexCount(); ++i)
+		{
+			// QPointF is is actually QPointDouble! So take care in comparisons!
+			QPointF p = trans.map(mV[i]);
+			float pX = static_cast<float>(p.x());
+			float pY = static_cast<float>(p.y());
+			if (pX != data[i].x || pY != data[i].y)
+			{
+				data[i].set(pX, pY);
+				dirty = true;
+			}
+		}
+
+		if (dirty)
+			markDirty(QSGNode::DirtyGeometry);
+	}
+};
+
+struct DotNode: public ElementNode < dotSegs + 2 >
+{
+	DotNode()
+	{
+		mGeo = std::unique_ptr<QSGGeometry>(new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), mV.size()));
+		mGeo->setDrawingMode(GL_TRIANGLE_FAN);
+		setGeometry(mGeo.get());
+		mMat = std::unique_ptr<QSGFlatColorMaterial>(new QSGFlatColorMaterial);
+		setMaterial(mMat.get());
+		reset();
+	}
+	/** \internal Reset the dot to its initial state. */
+	inline DotNode& reset()
+	{
+		mV[0] = { 0, 0};
+		mV[1] = { baseDotRadius, 0};
+		QMatrix m = QMatrix().rotate(360 / dotSegs);
+		for (int i = 2; i < dotSegs + 2; ++i)
+			mV[i] = m.map(mV[i - 1]);
 		return *this;
 	}
-
 	/** \internal Update the geometry by mapping the current segment into the coordinate system of the given matrix. */
 	inline void updateGeometry(const QMatrix& trans)
 	{
@@ -102,27 +170,6 @@ struct SegmentNode: public QSGGeometryNode
 		if (dirty)
 			markDirty(QSGNode::DirtyGeometry);
 	}
-
-	inline QPointF getEffectiveVertex(qint8 no)
-	{
-		if (no < mGeo->vertexCount())
-			return QPointF(mGeo->vertexDataAsPoint2D()[no].x, mGeo->vertexDataAsPoint2D()[no].y);
-		return QPointF();
-	}
-
-	/** \internal Update the forground color of the segment. */
-	inline void setColor(const QColor& color)
-	{
-		if (mMat->color() != color)
-		{
-			mMat->setColor(color);
-			markDirty(QSGNode::DirtyMaterial);
-		}
-	}
-
-	std::array<QPointF, 6> mV;
-	std::unique_ptr<QSGGeometry> mGeo;
-	std::unique_ptr<QSGFlatColorMaterial> mMat;
 };
 
 /** \internal Scene graph node of a digit (7 segments + dot and background color). */
@@ -164,6 +211,9 @@ public:
 		appendChildNode(mSegments[5].get());
 		mSegments[6] = std::unique_ptr<SegmentNode>(new SegmentNode);
 		appendChildNode(mSegments[6].get());
+
+		mDot = std::unique_ptr<DotNode>(new DotNode);
+		appendChildNode(mDot.get());
 	}
 
 	/** \internal Update the state of the node and all its children.
@@ -182,6 +232,7 @@ public:
 		qreal segWidth = baseSegWidth * scale;
 		qreal segLength = baseSegLength * scale;
 		qreal segGap = baseSegGap * scale;
+		qreal dotRadius = baseDotRadius * scale;
 		// Create a scale matrix, needed to scale basic vertices
 		QMatrix matScale = QMatrix().scale(scale, scale);
 
@@ -234,6 +285,11 @@ public:
 		// (G) middle
 		mSegments[6]->updateGeometry(matScale * QMatrix().translate(digitCenterX, digitCenterY));
 
+		// XXX: DEBUGGING
+		mDot->updateGeometry(matScale * QMatrix().translate(digitCenterX + segLength / 2 + segGap + segWidth / 2 + dotRadius +
+		                     segGap,
+		                     digitCenterY + segLength + 2 * segGap + segWidth / 2 - dotRadius));
+
 #if 0
 		qDebug() << "Effective digit size:" << mSegments[3]->getEffectiveVertex(1).y() - mSegments[0]->getEffectiveVertex(
 		             2).y();
@@ -264,12 +320,14 @@ public:
 			qWarning() << "Invalid value" << mSettings->mValue;
 		}
 
+		mDot->setColor(mSettings->mOnColor);
+
 		return resultingRect;
 	}
 
 private:
-	/* TODO: Add dot! */
 	std::array<std::unique_ptr<SegmentNode>, 7> mSegments;
+	std::unique_ptr<DotNode> mDot;
 	std::shared_ptr<DigitNodeSettings> mSettings;
 
 	/* 0 0×3F, 1 0×06, 2 0×5B, 3 0×4F, 4 0×66, 5 0×6D, 6 0×7D, 7 0×07, 8 0×7F, 9 0×6F */
