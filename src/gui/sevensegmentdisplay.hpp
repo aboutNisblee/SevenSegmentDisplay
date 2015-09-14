@@ -12,6 +12,7 @@
 #include <QQuickItem>
 
 class DigitNodeSettings;
+class SevenSegmentDisplayPrivate;
 
 /**
  * QQuick widget that implements a seven-segment display.
@@ -20,11 +21,17 @@ class SevenSegmentDisplay : public QQuickItem
 {
     Q_OBJECT
 
+	Q_PROPERTY(int digitCount READ getDigitCount WRITE setDigitCount NOTIFY digitCountChanged)
+
 	/** Property that controls the current value shown by the widget.
 	 * @note Currently only values from 0 to 9 are supported. */
 	Q_PROPERTY(int value READ getValue WRITE setValue NOTIFY valueChanged)
     /** Property that controls the digit height. */
 	Q_PROPERTY(int digitSize READ getDigitSize WRITE setDigitSize NOTIFY digitSizeChanged)
+
+	// TODO: Add content sized. This is the size of the digits and also the item size if not specified and bigger.
+//	Q_PROPERTY(int contentWidth READ getContentWidth NOTIFY contentWidthChanged)
+//	Q_PROPERTY(int contentHeight READ getContentHeight NOTIFY contentHeightChanged)
 
 	Q_ENUMS(Alignment)
 	/** Property that controls the vertical alignment. */
@@ -42,12 +49,16 @@ class SevenSegmentDisplay : public QQuickItem
 public:
 	enum Alignment
 	{
-		// TODO: Add some other alignments
+		AlignLeft,
+		AlignTop,
 		AlignCenter,
 	};
 
     SevenSegmentDisplay(QQuickItem* parent = nullptr);
+    virtual ~SevenSegmentDisplay();
 
+    int getDigitCount() const;
+    void setDigitCount(int count);
     int getValue() const;
     void setValue(int value);
     int getDigitSize() const;
@@ -64,6 +75,7 @@ public:
     void setOffColor(const QColor& color);
 
 signals:
+	void digitCountChanged();
 	void valueChanged();
 	void digitSizeChanged();
 	void verticalAlignmentChanged();
@@ -75,8 +87,10 @@ signals:
 protected:
     QSGNode* updatePaintNode(QSGNode*, UpdatePaintNodeData*);
 
-    /* TODO: Add the possibility to show multiple digits. */
-    std::shared_ptr<DigitNodeSettings> mDigitSettings;
+private:
+	QScopedPointer<SevenSegmentDisplayPrivate> d_ptr;
+    Q_DECLARE_PRIVATE(SevenSegmentDisplay)
+	Q_DISABLE_COPY(SevenSegmentDisplay)
 };
 
 #endif // SEVENSEGMENTDISPLAY_HPP

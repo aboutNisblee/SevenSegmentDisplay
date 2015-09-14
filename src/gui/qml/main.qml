@@ -14,68 +14,70 @@ Window {
         onDoubleClicked: Qt.quit()
     }
 
-    Row {
-        anchors.fill: parent
+    //    Row {
+    //        anchors.fill: parent
+    SevenSegmentDisplay {
+        id: digit
 
-        SevenSegmentDisplay {
-            id: digit
-            anchors {
-                top: parent.top
-                bottom: parent.bottom
-            }
-            width: parent.width / 2
-
-            digitSize: 120
-            verticalAlignment: SevenSegmentDisplay.AlignCenter
-            horizontalAlignment: SevenSegmentDisplay.AlignCenter
-
-            value: 0
+        anchors {
+            top: parent.top
+            bottom: parent.bottom
         }
+        width: parent.width / 2
+        digitSize: 280
+        digitCount: 2
+        bgColor: "black"
+        onColor: "red"
+        offColor: "black"
+        verticalAlignment: SevenSegmentDisplay.AlignCenter
+        horizontalAlignment: SevenSegmentDisplay.AlignCenter
 
-        Column {
-            anchors {
-                top: parent.top
-                bottom: parent.bottom
-            }
-            width: parent.width / 2
-
-            SevenSegmentDisplay {
-                id: digit2
-                anchors {
-                    left: parent.left
-                    right: parent.right
-                }
-                height: parent.height / 2
-                digitSize: 60
-                value: 0
-            }
-
-            Text {
-                id: text
-                anchors {
-                    left: parent.left
-                    right: parent.right
-                }
-                height: parent.height / 2
-                font.pointSize: 60
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                text: qsTr("0")
-            }
-        }
+        value: 0
     }
 
+    //        Column {
+    //            anchors {
+    //                top: parent.top
+    //                bottom: parent.bottom
+    //            }
+    //            width: parent.width / 2
+
+    //            SevenSegmentDisplay {
+    //                id: digit2
+    //                anchors {
+    //                    left: parent.left
+    //                    right: parent.right
+    //                }
+    //                height: parent.height / 2
+    //                digitSize: 60
+    //                value: 0
+    //            }
+
+    //            Text {
+    //                id: text
+    //                anchors {
+    //                    left: parent.left
+    //                    right: parent.right
+    //                }
+    //                height: parent.height / 2
+    //                font.pointSize: 60
+    //                horizontalAlignment: Text.AlignHCenter
+    //                verticalAlignment: Text.AlignVCenter
+    //                text: qsTr("0")
+    //            }
+    //        }
+    //    }
     Timer {
         id: timer
-        interval: 1000
+        interval: 250
         repeat: true
         running: true
         property int i: 0
         onTriggered: {
             i = (i + 1) % 10
             digit.value = i
-            digit2.value = i
-            text.text = i
+            //            digit2.value = i
+            //            text.text = i
         }
     }
 }
