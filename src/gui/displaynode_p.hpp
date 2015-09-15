@@ -34,20 +34,6 @@ constexpr quint8 lutSegCode[] =
 { 0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f };
 } // namespace
 
-/* Structure that is used to share settings between GUI and Render-Thread. */
-struct DisplayState
-{
-	int mDigitCount = 1;
-	int mValue = 0;
-	int mDigitSize = 24;
-	bool dot = false;
-	SevenSegmentDisplay::Alignment mVAlignment = SevenSegmentDisplay::AlignTop;
-	SevenSegmentDisplay::Alignment mHAlignment = SevenSegmentDisplay::AlignLeft;
-	QColor mBgColor = QColor("black");
-	QColor mOnColor = QColor("green");
-	QColor mOffColor = QColor("gray");
-};
-
 template<int count>
 class ElementNode: public QSGGeometryNode
 {
@@ -316,30 +302,86 @@ struct DigitNode: public QSGSimpleRectNode
 class DisplayNode: public QSGSimpleRectNode
 {
 public:
-	DisplayNode(std::shared_ptr<DisplayState> displayState) :
-		mDisplayState(displayState)
+	int getDigitCount() const { return mDigitCount; }
+	bool setDigitCount(int digitCount)
 	{
-		if (!mDisplayState)
-			mDisplayState = std::make_shared<DisplayState>(DisplayState());
+		if (digitCount == mDigitCount)
+			return false;
+		mDigitCount = digitCount;
+		return true;
 	}
 
-	//	bool setBgColor(const QColor bgColor)
-	//	{
-	//		if(bgColor == mBgColor)
-	//			return false;
-	//		mBgColor = bgColor;
-	//		return true;
-	//	}
-	//	QColor getBgColor() const { return mBgColor; }
+	int getValue() const { return mValue; }
+	bool setValue(int value)
+	{
+		if (value == mValue)
+			return false;
+		mValue = value;
+		return true;
+	}
+
+	int getDigitSize() const { return mDigitSize; }
+	bool setDigitSize(int digitSize)
+	{
+		if (digitSize == mDigitSize)
+			return false;
+		mDigitSize = digitSize;
+		return true;
+	}
+
+	SevenSegmentDisplay::Alignment getHAlignment() const { return mHAlignment; }
+	bool setHAlignment(SevenSegmentDisplay::Alignment hAlignment)
+	{
+		if (hAlignment == mHAlignment)
+			return false;
+		mHAlignment = hAlignment;
+		return true;
+	}
+
+	SevenSegmentDisplay::Alignment getVAlignment() const { return mVAlignment; }
+	bool setVAlignment(SevenSegmentDisplay::Alignment vAlignment)
+	{
+		if (vAlignment == mVAlignment)
+			return false;
+		mVAlignment = vAlignment;
+		return true;
+	}
+
+	const QColor& getBgColor() const { return mBgColor; }
+	bool setBgColor(const QColor& bgColor)
+	{
+		if (bgColor == mBgColor)
+			return false;
+		mBgColor = bgColor;
+		return true;
+	}
+
+	const QColor& getOnColor() const { return mOnColor; }
+	bool setOnColor(const QColor& onColor)
+	{
+		if (onColor == mOnColor)
+			return false;
+		mOnColor = onColor;
+		return true;
+	}
+
+	const QColor& getOffColor() const { return mOffColor; }
+	bool setOffColor(const QColor& offColor)
+	{
+		if (offColor == mOffColor)
+			return false;
+		mOffColor = offColor;
+		return true;
+	}
 
 	inline QSizeF update(const QRectF& boundingRectange)
 	{
 		QRectF contentRect;
 
 		// Digit count
-		while (childCount() != mDisplayState->mDigitCount)
+		while (childCount() != mDigitCount)
 		{
-			if (childCount() < mDisplayState->mDigitCount)
+			if (childCount() < mDigitCount)
 			{
 				qDebug() << "Adding new digit";
 				appendChildNode(new DigitNode);
@@ -355,11 +397,11 @@ public:
 			return contentRect.size();
 
 		// Calculate needed scale to match requested digit size
-		qreal scale = mDisplayState->mDigitSize / baseDigitHeight;
+		qreal scale = mDigitSize / baseDigitHeight;
 
 		// Calculate content size
-		contentRect.setWidth(DigitNode::width() * scale * mDisplayState->mDigitCount);
-		contentRect.setHeight(mDisplayState->mDigitSize);
+		contentRect.setWidth(DigitNode::width() * scale * mDigitCount);
+		contentRect.setHeight(mDigitSize);
 
 		// Update rectangle of the background to the maximum of the size of the given rectangle and the content size
 		if (rect().size() != contentRect.size().expandedTo(boundingRectange.size()))
@@ -373,12 +415,12 @@ public:
 
 		/* Set the background color
 		 * This will only mark the material dirty when color differs from current one. */
-		setColor(mDisplayState->mBgColor);
+		setColor(mBgColor);
 
 		// Horizontal alignment
 		if (contentRect.width() < rect().width())
 		{
-			switch (mDisplayState->mHAlignment)
+			switch (mHAlignment)
 			{
 			case SevenSegmentDisplay::AlignLeft:
 				break;
@@ -394,7 +436,7 @@ public:
 		// Verical alignment
 		if (contentRect.height() < rect().height())
 		{
-			switch (mDisplayState->mVAlignment)
+			switch (mVAlignment)
 			{
 			case SevenSegmentDisplay::AlignLeft:
 				qDebug() << "Incompatible alignment: AlignLeft as vertical alignment";
@@ -409,11 +451,11 @@ public:
 
 		// Split the content pane into digit parts
 		QRectF digitRect = contentRect;
-		digitRect.setWidth(digitRect.width() / mDisplayState->mDigitCount);
+		digitRect.setWidth(digitRect.width() / mDigitCount);
 
 		// Update digits
-		Q_ASSERT(childCount() == mDisplayState->mDigitCount);
-		for (int i = 0; i < mDisplayState->mDigitCount; ++i)
+		Q_ASSERT(childCount() == mDigitCount);
+		for (int i = 0; i < mDigitCount; ++i)
 		{
 			DigitNode* digit = static_cast<DigitNode*>(childAtIndex(i));
 
@@ -424,7 +466,7 @@ public:
 
 			digit->update(scale);
 
-			digit->setValue(mDisplayState->mValue, mDisplayState->mOnColor, mDisplayState->mOffColor);
+			digit->setValue(mValue, mOnColor, mOffColor);
 
 			digit->setColor(Qt::transparent);
 			//			digit->setColor("gray");
@@ -434,7 +476,14 @@ public:
 	}
 
 private:
-	std::shared_ptr<DisplayState> mDisplayState;
+	int mDigitCount = 1;
+	int mValue = 0;
+	int mDigitSize = 24;
+	SevenSegmentDisplay::Alignment mHAlignment = SevenSegmentDisplay::AlignLeft;
+	SevenSegmentDisplay::Alignment mVAlignment = SevenSegmentDisplay::AlignTop;
+	QColor mBgColor = QColor("black");
+	QColor mOnColor = QColor("green");
+	QColor mOffColor = QColor("gray");
 };
 
 #endif /* DISPLAYNODE_P_HPP_ */

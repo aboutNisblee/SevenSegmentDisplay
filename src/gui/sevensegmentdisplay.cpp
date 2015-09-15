@@ -10,16 +10,14 @@
 
 struct SevenSegmentDisplayPrivate
 {
-	SevenSegmentDisplayPrivate()
+	SevenSegmentDisplayPrivate():
+		mDisplayNode(new DisplayNode)
 	{
-		mDisplayState = std::make_shared<DisplayState>(DisplayState());
 	}
 	Q_DISABLE_COPY(SevenSegmentDisplayPrivate)
 
-	std::shared_ptr<DisplayState> mDisplayState;
-
 	// Owned by scene graph
-	//	DisplayNode* mDisplayNode = nullptr;
+	DisplayNode* mDisplayNode;
 };
 
 SevenSegmentDisplay::SevenSegmentDisplay(QQuickItem* parent) :
@@ -34,97 +32,89 @@ SevenSegmentDisplay::~SevenSegmentDisplay()
 {
 }
 
-int SevenSegmentDisplay::getDigitCount() const { Q_D(const SevenSegmentDisplay); return d->mDisplayState->mDigitCount; }
+int SevenSegmentDisplay::getDigitCount() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getDigitCount(); }
 void SevenSegmentDisplay::setDigitCount(int count)
 {
 	Q_D(SevenSegmentDisplay);
-	if (d->mDisplayState->mDigitCount != count)
+	if(d->mDisplayNode->setDigitCount(count))
 	{
-		d->mDisplayState->mDigitCount = count;
 		update();
 		emit digitCountChanged();
 	}
 }
 
-int SevenSegmentDisplay::getValue() const { Q_D(const SevenSegmentDisplay); return d->mDisplayState->mValue; }
+int SevenSegmentDisplay::getValue() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getValue(); }
 void SevenSegmentDisplay::setValue(int value)
 {
 	Q_D(SevenSegmentDisplay);
-	if (d->mDisplayState->mValue != value)
+	if(d->mDisplayNode->setValue(value))
 	{
-		d->mDisplayState->mValue = value;
 		update();
 		emit valueChanged();
 	}
 }
 
-int SevenSegmentDisplay::getDigitSize() const { Q_D(const SevenSegmentDisplay); return d->mDisplayState->mDigitSize; }
+int SevenSegmentDisplay::getDigitSize() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getDigitSize(); }
 void SevenSegmentDisplay::setDigitSize(int size)
 {
 	Q_D(SevenSegmentDisplay);
-	if (d->mDisplayState->mDigitSize != size)
+	if(d->mDisplayNode->setDigitSize(size))
 	{
-		d->mDisplayState->mDigitSize = size;
 		update();
 		emit digitSizeChanged();
 	}
 }
 
-SevenSegmentDisplay::Alignment SevenSegmentDisplay::getVerticalAlignment() const { Q_D(const SevenSegmentDisplay); return d->mDisplayState->mVAlignment; }
+SevenSegmentDisplay::Alignment SevenSegmentDisplay::getVerticalAlignment() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getVAlignment(); }
 void SevenSegmentDisplay::setVerticalAlignment(Alignment alignment)
 {
 	Q_D(SevenSegmentDisplay);
-	if (d->mDisplayState->mVAlignment != alignment)
+	if(d->mDisplayNode->setVAlignment(alignment))
 	{
-		d->mDisplayState->mVAlignment = alignment;
 		update();
 		emit verticalAlignmentChanged();
 	}
 }
 
-SevenSegmentDisplay::Alignment SevenSegmentDisplay::getHorizontalAlignment() const { Q_D(const SevenSegmentDisplay); return d->mDisplayState->mHAlignment; }
+SevenSegmentDisplay::Alignment SevenSegmentDisplay::getHorizontalAlignment() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getHAlignment(); }
 void SevenSegmentDisplay::setHorizontalAlignment(Alignment alignment)
 {
 	Q_D(SevenSegmentDisplay);
-	if (d->mDisplayState->mHAlignment != alignment)
+	if(d->mDisplayNode->setHAlignment(alignment))
 	{
-		d->mDisplayState->mHAlignment = alignment;
 		update();
 		emit horizontalAlignmentChanged();
 	}
 }
 
-QColor SevenSegmentDisplay::getBgColor() const { Q_D(const SevenSegmentDisplay); return d->mDisplayState->mBgColor; }
+QColor SevenSegmentDisplay::getBgColor() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getBgColor(); }
 void SevenSegmentDisplay::setBgColor(const QColor& color)
 {
 	Q_D(SevenSegmentDisplay);
-	if (d->mDisplayState->mBgColor != color)
+	if(d->mDisplayNode->setBgColor(color))
 	{
-		d->mDisplayState->mBgColor = color;
 		update();
 		emit bgColorChanged();
 	}
 }
 
-QColor SevenSegmentDisplay::getOnColor() const { Q_D(const SevenSegmentDisplay); return d->mDisplayState->mOnColor; }
+QColor SevenSegmentDisplay::getOnColor() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getOnColor(); }
 void SevenSegmentDisplay::setOnColor(const QColor& color)
 {
 	Q_D(SevenSegmentDisplay);
-	if (d->mDisplayState->mOnColor != color)
+	if(d->mDisplayNode->setOnColor(color))
 	{
-		d->mDisplayState->mOnColor = color;
 		update();
 		emit onColorChanged();
 	}
 }
 
-QColor SevenSegmentDisplay::getOffColor() const { Q_D(const SevenSegmentDisplay); return d->mDisplayState->mOffColor; }
+QColor SevenSegmentDisplay::getOffColor() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getOffColor(); }
 void SevenSegmentDisplay::setOffColor(const QColor& color)
 {
 	Q_D(SevenSegmentDisplay);
-	if (d->mDisplayState->mOffColor != color)
+	if(d->mDisplayNode->setOffColor(color))
 	{
-		d->mDisplayState->mOffColor = color;
 		update();
 		emit offColorChanged();
 	}
@@ -136,11 +126,9 @@ QSGNode* SevenSegmentDisplay::updatePaintNode(QSGNode* oldRoot, QQuickItem::Upda
 	Q_D(SevenSegmentDisplay);
 	DisplayNode* displayNode = static_cast<DisplayNode*>(oldRoot);
 	if (!displayNode)
-	{
-		displayNode = new DisplayNode(d->mDisplayState);
-	}
+		displayNode = d->mDisplayNode;
 
-	// Update digit and all its children, based on values in mDisplayState.
+	// Update digit and all its children
 	QSizeF contentSize = displayNode->update(boundingRect());
 #if 0
 	qDebug() << "boundingRect:" << boundingRect();
