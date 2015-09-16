@@ -14,12 +14,10 @@
 
 #include <QSGGeometryNode>
 #include <QSGSimpleRectNode>
-#include <QSGFlatColorMaterial>
 #include <QMatrix>
 
 namespace
 {
-// XXX: Configurable??
 /* Sizes in un-scaled coordinate system. */
 constexpr qreal baseSegLength = 2.0;
 constexpr qreal baseSegWidth = 0.60;
@@ -39,14 +37,6 @@ class ElementNode: public QSGGeometryNode
 {
 public:
 	virtual ~ElementNode() {}
-	/** \internal Rotate the element. */
-	inline ElementNode& rotate(qreal deg)
-	{
-		QMatrix m = QMatrix().rotate(deg);
-		for (QPointF& v : mVertices)
-			v = m.map(v);
-		return *this;
-	}
 	inline QPointF getEffectiveVertex(qint8 no)
 	{
 		if (no < mGeometry->vertexCount())
@@ -56,11 +46,11 @@ public:
 	/** \internal Update the foreground color of the element. */
 	inline void setColor(const QColor& color)
 	{
-		if (mMaterial->color() != color)
-		{
-			mMaterial->setColor(color);
-			markDirty(QSGNode::DirtyMaterial);
-		}
+		if (mMaterial->color() == color)
+			return;
+
+		mMaterial->setColor(color);
+		markDirty(QSGNode::DirtyMaterial);
 	}
 	virtual void updateGeometry(const QMatrix& trans) = 0;
 protected:
@@ -72,18 +62,14 @@ protected:
 /** \internal Scene graph geometry node of a single segment. */
 struct SegmentNode: public ElementNode<6>
 {
-	SegmentNode()
+	explicit SegmentNode(qreal deg = 0)
 	{
 		mGeometry = std::unique_ptr<QSGGeometry>(new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), mVertices.size()));
 		mGeometry->setDrawingMode(GL_TRIANGLE_STRIP);
 		setGeometry(mGeometry.get());
 		mMaterial = std::unique_ptr<QSGFlatColorMaterial>(new QSGFlatColorMaterial);
 		setMaterial(mMaterial.get());
-		reset();
-	}
-	/** \internal Reset the segment to its initial state. */
-	inline SegmentNode& reset()
-	{
+
 		/* Vertices are placed in the center of a 2-dimensional coordinate system to simplify initial rotation.
 		 * The y values are increasing downwards to ease mapping to Quicks coordinate system.
 		 *   /v2---------v4\
@@ -96,7 +82,13 @@ struct SegmentNode: public ElementNode<6>
 		mVertices[3] = {baseSegLength / 2 - baseSegWidth / 2, baseSegWidth / 2};
 		mVertices[4] = {baseSegLength / 2 - baseSegWidth / 2, -baseSegWidth / 2};
 		mVertices[5] = {baseSegLength / 2, 0};
-		return *this;
+
+		if (deg)
+		{
+			QMatrix m = QMatrix().rotate(deg);
+			for (QPointF& v : mVertices)
+				v = m.map(v);
+		}
 	}
 	/** \internal Update the geometry by mapping the current segment into the coordinate system of the given matrix. */
 	inline void updateGeometry(const QMatrix& trans)
@@ -130,17 +122,12 @@ struct DotNode: public ElementNode < dotSegs + 2 >
 		setGeometry(mGeometry.get());
 		mMaterial = std::unique_ptr<QSGFlatColorMaterial>(new QSGFlatColorMaterial);
 		setMaterial(mMaterial.get());
-		reset();
-	}
-	/** \internal Reset the dot to its initial state. */
-	inline DotNode& reset()
-	{
+
 		mVertices[0] = { 0, 0};
 		mVertices[1] = { baseDotRadius, 0};
 		QMatrix m = QMatrix().rotate(360 / dotSegs);
 		for (int i = 2; i < dotSegs + 2; ++i)
 			mVertices[i] = m.map(mVertices[i - 1]);
-		return *this;
 	}
 	/** \internal Update the geometry by mapping the current segment into the coordinate system of the given matrix. */
 	inline void updateGeometry(const QMatrix& trans)
@@ -157,7 +144,6 @@ struct DotNode: public ElementNode < dotSegs + 2 >
 			{
 				data[i].set(pX, pY);
 				dirty = true;
-				//				qDebug() << "Dirty!";
 			}
 		}
 
@@ -169,11 +155,6 @@ struct DotNode: public ElementNode < dotSegs + 2 >
 /** \internal Scene graph node of a digit (7 segments + dot). */
 struct DigitNode: public QSGSimpleRectNode
 {
-	/* TODO: Use a config structure defined by this class and pass it
-	 * in as shared_ptr from client. Pass the whole or only a part to all
-	 * segments. -> No need for coping the values to all segments nor digits.
-	 */
-
 	/** \internal Construct a new digit.
 	 * \note The node is typically owned by the render thread. To easily share the
 	 * property values of the client with the node in the render thread, a DigitNodeSettings object is used.
@@ -181,33 +162,16 @@ struct DigitNode: public QSGSimpleRectNode
 	 */
 	DigitNode()
 	{
-		SegmentNode* segment = new SegmentNode;
-		appendChildNode(segment);
+		appendChildNode(new SegmentNode());
+		appendChildNode(new SegmentNode(90));
+		appendChildNode(new SegmentNode(90));
+		appendChildNode(new SegmentNode());
+		appendChildNode(new SegmentNode(90));
+		appendChildNode(new SegmentNode(90));
+		appendChildNode(new SegmentNode());
+		appendChildNode(new DotNode);
 
-		segment = new SegmentNode;
-		segment->rotate(90);
-		appendChildNode(segment);
-
-		segment = new SegmentNode;
-		segment->rotate(90);
-		appendChildNode(segment);
-
-		segment = new SegmentNode;
-		appendChildNode(segment);
-
-		segment = new SegmentNode;
-		segment->rotate(90);
-		appendChildNode(segment);
-
-		segment = new SegmentNode;
-		segment->rotate(90);
-		appendChildNode(segment);
-
-		segment = new SegmentNode;
-		appendChildNode(segment);
-
-		DotNode* dot = new DotNode;
-		appendChildNode(dot);
+		setColor(Qt::transparent);
 	}
 
 	/** \internal Update the state of the node and all its children.
@@ -302,188 +266,193 @@ struct DigitNode: public QSGSimpleRectNode
 class DisplayNode: public QSGSimpleRectNode
 {
 public:
-	int getDigitCount() const { return mDigitCount; }
+	inline int getDigitCount() const { return childCount(); }
 	bool setDigitCount(int digitCount)
 	{
-		if (digitCount == mDigitCount)
+		if (digitCount == childCount())
 			return false;
-		mDigitCount = digitCount;
+
+		while (childCount() != digitCount)
+		{
+			if (childCount() < digitCount)
+				appendChildNode(new DigitNode);
+			else
+				removeChildNode(lastChild());
+		}
+		mGeometryDirty = true;
 		return true;
 	}
 
-	int getValue() const { return mValue; }
-	bool setValue(int value)
+	inline int getValue() const { return mValue; }
+	inline bool setValue(int value)
 	{
 		if (value == mValue)
 			return false;
 		mValue = value;
+		mSegmentsDirty = true;
 		return true;
 	}
 
-	int getDigitSize() const { return mDigitSize; }
-	bool setDigitSize(int digitSize)
+	inline int getDigitSize() const { return mDigitSize; }
+	inline bool setDigitSize(int digitSize)
 	{
 		if (digitSize == mDigitSize)
 			return false;
+
 		mDigitSize = digitSize;
+		// Calculate needed scale to match requested digit size
+		mScale = mDigitSize / baseDigitHeight;
+		mGeometryDirty = true;
 		return true;
 	}
 
-	SevenSegmentDisplay::Alignment getHAlignment() const { return mHAlignment; }
-	bool setHAlignment(SevenSegmentDisplay::Alignment hAlignment)
+	inline SevenSegmentDisplay::Alignment getHAlignment() const { return mHAlignment; }
+	inline bool setHAlignment(SevenSegmentDisplay::Alignment hAlignment)
 	{
 		if (hAlignment == mHAlignment)
 			return false;
 		mHAlignment = hAlignment;
+		mGeometryDirty = true;
 		return true;
 	}
 
-	SevenSegmentDisplay::Alignment getVAlignment() const { return mVAlignment; }
-	bool setVAlignment(SevenSegmentDisplay::Alignment vAlignment)
+	inline SevenSegmentDisplay::Alignment getVAlignment() const { return mVAlignment; }
+	inline bool setVAlignment(SevenSegmentDisplay::Alignment vAlignment)
 	{
 		if (vAlignment == mVAlignment)
 			return false;
 		mVAlignment = vAlignment;
+		mGeometryDirty = true;
 		return true;
 	}
 
-	const QColor& getBgColor() const { return mBgColor; }
-	bool setBgColor(const QColor& bgColor)
+	inline QColor getBgColor() const { return color(); }
+	inline bool setBgColor(const QColor& bgColor)
 	{
-		if (bgColor == mBgColor)
+		if (color() == bgColor)
 			return false;
-		mBgColor = bgColor;
+
+		/* Set the background color
+		 * This will only mark the material dirty when color differs from current one. */
+		setColor(bgColor);
 		return true;
 	}
 
-	const QColor& getOnColor() const { return mOnColor; }
-	bool setOnColor(const QColor& onColor)
+	inline const QColor& getOnColor() const { return mOnColor; }
+	inline bool setOnColor(const QColor& onColor)
 	{
 		if (onColor == mOnColor)
 			return false;
 		mOnColor = onColor;
+		mSegmentsDirty = true;
 		return true;
 	}
 
-	const QColor& getOffColor() const { return mOffColor; }
-	bool setOffColor(const QColor& offColor)
+	inline const QColor& getOffColor() const { return mOffColor; }
+	inline bool setOffColor(const QColor& offColor)
 	{
 		if (offColor == mOffColor)
 			return false;
 		mOffColor = offColor;
+		mSegmentsDirty = true;
 		return true;
 	}
 
-	inline QSizeF update(const QRectF& boundingRectange)
+	QSizeF update(const QRectF& boundingRectange)
 	{
-		QRectF contentRect;
-
-		// Digit count
-		while (childCount() != mDigitCount)
-		{
-			if (childCount() < mDigitCount)
-			{
-				qDebug() << "Adding new digit";
-				appendChildNode(new DigitNode);
-			}
-			else
-			{
-				qDebug() << "Removing digit";
-				removeChildNode(lastChild());
-			}
-		}
-
 		if (0 == childCount())
-			return contentRect.size();
+			return QSizeF();
 
-		// Calculate needed scale to match requested digit size
-		qreal scale = mDigitSize / baseDigitHeight;
-
-		// Calculate content size
-		contentRect.setWidth(DigitNode::width() * scale * mDigitCount);
-		contentRect.setHeight(mDigitSize);
-
-		// Update rectangle of the background to the maximum of the size of the given rectangle and the content size
-		if (rect().size() != contentRect.size().expandedTo(boundingRectange.size()))
+		if (mGeometryDirty)
 		{
-			setRect(QRectF(QPointF(), contentRect.size().expandedTo(boundingRectange.size())));
-			markDirty(QSGNode::DirtyGeometry);
-		}
+			// Calculate content size
+			mContentRect.setWidth(DigitNode::width() * mScale * childCount());
+			mContentRect.setHeight(mDigitSize);
 
-		// Move the content rectangle to top left of the bounding rectangle
-		contentRect.moveTopLeft(rect().topLeft());
-
-		/* Set the background color
-		 * This will only mark the material dirty when color differs from current one. */
-		setColor(mBgColor);
-
-		// Horizontal alignment
-		if (contentRect.width() < rect().width())
-		{
-			switch (mHAlignment)
+			// Update rectangle of the background to the maximum of the size of the given rectangle and the content size
+			if (rect().size() != mContentRect.size().expandedTo(boundingRectange.size()))
 			{
-			case SevenSegmentDisplay::AlignLeft:
-				break;
-			case SevenSegmentDisplay::AlignTop:
-				qDebug() << "Incompatible alignment: AlignTop as horizontal alignment";
-				break;
-			case SevenSegmentDisplay::AlignCenter:
-				contentRect.moveCenter(QPointF(rect().center().x(), contentRect.center().y()));
-				break;
+				setRect(QRectF(QPointF(), mContentRect.size().expandedTo(boundingRectange.size())));
+				markDirty(QSGNode::DirtyGeometry);
 			}
-		}
 
-		// Verical alignment
-		if (contentRect.height() < rect().height())
-		{
-			switch (mVAlignment)
+			// Move the content rectangle to top left of the bounding rectangle
+			mContentRect.moveTopLeft(rect().topLeft());
+
+			// Horizontal alignment
+			if (mContentRect.width() < rect().width())
 			{
-			case SevenSegmentDisplay::AlignLeft:
-				qDebug() << "Incompatible alignment: AlignLeft as vertical alignment";
-				break;
-			case SevenSegmentDisplay::AlignTop:
-				break;
-			case SevenSegmentDisplay::AlignCenter:
-				contentRect.moveCenter(QPointF(contentRect.center().x(), rect().center().y()));
-				break;
+				switch (mHAlignment)
+				{
+				case SevenSegmentDisplay::AlignLeft:
+					break;
+				case SevenSegmentDisplay::AlignTop:
+					qDebug() << "Incompatible alignment: AlignTop as horizontal alignment";
+					break;
+				case SevenSegmentDisplay::AlignCenter:
+					mContentRect.moveCenter(QPointF(rect().center().x(), mContentRect.center().y()));
+					break;
+				}
 			}
-		}
+
+			// Verical alignment
+			if (mContentRect.height() < rect().height())
+			{
+				switch (mVAlignment)
+				{
+				case SevenSegmentDisplay::AlignLeft:
+					qDebug() << "Incompatible alignment: AlignLeft as vertical alignment";
+					break;
+				case SevenSegmentDisplay::AlignTop:
+					break;
+				case SevenSegmentDisplay::AlignCenter:
+					mContentRect.moveCenter(QPointF(mContentRect.center().x(), rect().center().y()));
+					break;
+				}
+			}
+		} // geometry update
 
 		// Split the content pane into digit parts
-		QRectF digitRect = contentRect;
-		digitRect.setWidth(digitRect.width() / mDigitCount);
+		QRectF digitRect = mContentRect;
+		digitRect.setWidth(digitRect.width() / childCount());
 
 		// Update digits
-		Q_ASSERT(childCount() == mDigitCount);
-		for (int i = 0; i < mDigitCount; ++i)
+		for (int i = 0; i < childCount(); ++i)
 		{
 			DigitNode* digit = static_cast<DigitNode*>(childAtIndex(i));
 
-			// Move digit rect to the right position
-			QRectF rect = digitRect;
-			rect.moveLeft(rect.left() + rect.width() * i);
-			digit->setRect(rect);
+			if (mGeometryDirty)
+			{
+				// Move digit rect to the right position
+				QRectF rect = digitRect;
+				rect.moveLeft(rect.left() + rect.width() * i);
+				digit->setRect(rect);
 
-			digit->update(scale);
+				digit->update(mScale);
+			}
 
-			digit->setValue(mValue, mOnColor, mOffColor);
-
-			digit->setColor(Qt::transparent);
-			//			digit->setColor("gray");
+			if (mSegmentsDirty)
+				digit->setValue(mValue, mOnColor, mOffColor);
 		}
 
-		return contentRect.size();
+		mGeometryDirty = false;
+		mSegmentsDirty = false;
+
+		return mContentRect.size();
 	}
 
 private:
-	int mDigitCount = 1;
 	int mValue = 0;
 	int mDigitSize = 24;
 	SevenSegmentDisplay::Alignment mHAlignment = SevenSegmentDisplay::AlignLeft;
 	SevenSegmentDisplay::Alignment mVAlignment = SevenSegmentDisplay::AlignTop;
-	QColor mBgColor = QColor("black");
 	QColor mOnColor = QColor("green");
 	QColor mOffColor = QColor("gray");
+
+	bool mGeometryDirty = true;
+	bool mSegmentsDirty = true;
+	qreal mScale = mDigitSize / baseDigitHeight;
+	QRectF mContentRect;
 };
 
 #endif /* DISPLAYNODE_P_HPP_ */

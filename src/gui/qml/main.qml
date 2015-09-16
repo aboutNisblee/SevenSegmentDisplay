@@ -58,7 +58,7 @@ Window {
                 digitSize: 60
                 digitCount: 4
                 bgColor: "orange"
-                onColor: "black"
+                onColor: "green"
                 offColor: "gray"
                 verticalAlignment: SevenSegmentDisplay.AlignCenter
                 horizontalAlignment: SevenSegmentDisplay.AlignCenter
