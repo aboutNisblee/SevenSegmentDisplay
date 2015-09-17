@@ -141,7 +141,10 @@ QSGNode* SevenSegmentDisplay::updatePaintNode(QSGNode* oldRoot, QQuickItem::Upda
 	Q_D(SevenSegmentDisplay);
 	DisplayNode* displayNode = static_cast<DisplayNode*>(oldRoot);
 	if (!displayNode)
+	{
 		displayNode = d->mDisplayNode;
+		connect(displayNode, &DisplayNode::overflow, this, &SevenSegmentDisplay::overflow);
+	}
 
 	// Update digit and all its children
 	QSizeF contentSize = displayNode->update(boundingRect());

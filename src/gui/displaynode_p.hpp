@@ -8,6 +8,8 @@
 #ifndef DISPLAYNODE_P_HPP_
 #define DISPLAYNODE_P_HPP_
 
+#include "sevensegmentdisplay.hpp"
+
 #include <memory>
 #include <algorithm>
 #include <vector>
@@ -205,11 +207,11 @@ struct DigitNode: public QSGNode
 #endif
 	}
 
-	inline void setValue(int value, const QColor& onColor, const QColor& offColor)
+	inline void setValue(quint8 value, const QColor& onColor, const QColor& offColor)
 	{
 		Q_ASSERT(8 == childCount());
 
-		if (value >= 0 && value < 10)
+		if (value < 10)
 		{
 			quint8 code = lutSegCode[value];
 			quint8 mask = 0x01;
@@ -225,6 +227,18 @@ struct DigitNode: public QSGNode
 			qWarning() << "Invalid value" << value;
 		}
 
+		// Disable dot
+		static_cast<DotNode*>(lastChild())->setColor(offColor);
+	}
+
+	inline void setMinus(const QColor& onColor, const QColor& offColor)
+	{
+		for (quint8 i = 0; i < 7; ++i)
+		{
+			/* Segment material is only marked dirty, when color is changed. */
+			static_cast<SegmentNode*>(childAtIndex(i))->setColor((6 == i) ? onColor : offColor);
+		}
+		// Disable dot
 		static_cast<DotNode*>(lastChild())->setColor(offColor);
 	}
 
@@ -240,23 +254,18 @@ struct DigitNode: public QSGNode
 };
 
 /** \internal Root scene graph node of the display. */
-class DisplayNode: public QSGSimpleRectNode
+class DisplayNode: public QObject, public QSGSimpleRectNode
 {
+	Q_OBJECT
+
 public:
-	inline int getDigitCount() const { return childCount(); }
+	inline int getDigitCount() const { return mDigitCount; }
 	bool setDigitCount(int digitCount)
 	{
-		if (digitCount == childCount())
+		if (digitCount == mDigitCount)
 			return false;
 
-		while (childCount() != digitCount)
-		{
-			if (childCount() < digitCount)
-				appendChildNode(new DigitNode);
-			else
-				removeChildNode(lastChild());
-		}
-		mGeometryDirty = true;
+		mDigitCount = digitCount;
 		return true;
 	}
 
@@ -313,15 +322,13 @@ public:
 		return true;
 	}
 
-	inline QColor getBgColor() const { return color(); }
+	inline QColor getBgColor() const { return mBgColor; }
 	inline bool setBgColor(const QColor& bgColor)
 	{
-		if (color() == bgColor)
+		if (bgColor == mBgColor)
 			return false;
 
-		/* Set the background color
-		 * This will only mark the material dirty when color differs from current one. */
-		setColor(bgColor);
+		mBgColor = bgColor;
 		return true;
 	}
 
@@ -352,14 +359,24 @@ public:
 	 */
 	QSizeF update(const QRectF& boundingRectange)
 	{
-		if (0 == childCount())
-			return QSizeF();
+		// Check digit count
+		while (childCount() != mDigitCount)
+		{
+			if (childCount() < mDigitCount)
+				appendChildNode(new DigitNode);
+			else
+				removeChildNode(lastChild());
+
+			mGeometryDirty = true;
+			mSegmentsDirty = true;
+		}
 
 		if (rect() != boundingRectange)
 			mGeometryDirty = true;
 
 		if (mGeometryDirty)
 		{
+
 			// Calculate content size
 			mContentRect.setHeight(mDigitSize);
 			mContentRect.setWidth(DigitNode::width() * mScale * childCount());
@@ -432,23 +449,29 @@ public:
 			double integral = 0;
 			double fraction = std::modf(mValue, &integral);
 
-			int pos = setInteger(0, childCount() - mPrecision, std::abs(static_cast<quint64>(integral)));
-
-			if (mPrecision > childCount())
-				qWarning() << "Invalid precision:" << mPrecision << "( digitCount:" << childCount() << ")";
-			else if (mPrecision > 0 && mPrecision <= childCount())
+			int pos = setInteger(0, childCount() - mPrecision, static_cast<qint64>(integral));
+			if (pos >= 0)
 			{
-				// Set dot
-				if (pos > 0)
+				if (mPrecision > childCount())
+					qWarning() << "Invalid precision:" << mPrecision << "( digitCount:" << childCount() << ")";
+				else if (mPrecision > 0 && mPrecision <= childCount())
 				{
-					DigitNode* digit = static_cast<DigitNode*>(childAtIndex(pos - 1));
-					digit->setDot(mOnColor);
-				}
+					// Set dot
+					if (pos > 0)
+					{
+						DigitNode* digit = static_cast<DigitNode*>(childAtIndex(pos - 1));
+						digit->setDot(mOnColor);
+					}
 
-				quint64 fracAsInt = std::round(fraction * std::pow(10, mPrecision));
-				setInteger(pos, childCount(), fracAsInt);
+					qint64 fracAsInt = std::round(fraction * std::pow(10, mPrecision));
+					setInteger(pos, childCount(), fracAsInt);
+				}
 			}
 		}
+
+		/* Set the background color
+		 * This will only mark the material dirty when color differs from current one. */
+		setColor(mBgColor);
 
 		mGeometryDirty = false;
 		mSegmentsDirty = false;
@@ -456,32 +479,53 @@ public:
 		return mContentRect.size();
 	}
 
+signals:
+	void overflow();
+
 private:
-	int setInteger(int first, int last, quint64 value)
+	int setInteger(int first, int last, qint64 value)
 	{
 		if (first < last)
 		{
-			if (static_cast<quint64>(std::log10(value)) + 1 > last - first)
+			int neededPositions = 1;
+			if (value != 0)
+				neededPositions = static_cast<int>(std::log10(std::abs(value))) + ((value < 0) ? 2 : 1);
+
+			if (neededPositions > last - first)
 			{
-				qWarning() << "Overflow at:" << value;
-				value = value % static_cast<quint64>(std::pow(10, last - first));
+				emit overflow();
+				//				value = value % static_cast<qint64>(std::pow(10, last - first));
+				for (int i = 0; i < childCount(); ++i)
+					static_cast<DigitNode*>(childAtIndex(i))->setMinus(mOnColor, mOffColor);
+				return -1;
+			}
+
+			if (value < 0)
+			{
+				DigitNode* digit = static_cast<DigitNode*>(childAtIndex(first));
+				digit->setMinus(mOnColor, mOffColor);
+				++first;
+
+				value = std::abs(value);
 			}
 
 			//			qDebug() << "Pos:" << first << ":" << static_cast<int>(value / std::pow(10, last - first - 1));
 
 			DigitNode* digit = static_cast<DigitNode*>(childAtIndex(first));
 			digit->setValue(value / std::pow(10, last - first - 1), mOnColor, mOffColor);
-			return setInteger(first + 1, last, std::fmod(value, std::pow(10, last - first - 1)));
+			return setInteger(first + 1, last, static_cast<qint64>(std::fmod(value, std::pow(10, last - first - 1))));
 		}
 		else
 			return first;
 	}
 
 	double mValue;
+	int mDigitCount = 1;
 	int mPrecision = 0;
 	int mDigitSize = 24;
 	SevenSegmentDisplay::Alignment mHAlignment = SevenSegmentDisplay::AlignLeft;
 	SevenSegmentDisplay::Alignment mVAlignment = SevenSegmentDisplay::AlignTop;
+	QColor mBgColor = QColor(Qt::transparent);
 	QColor mOnColor = QColor("green");
 	QColor mOffColor = QColor("gray");
 

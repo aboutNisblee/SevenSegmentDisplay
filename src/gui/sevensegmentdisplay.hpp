@@ -96,6 +96,8 @@ signals:
 	void onColorChanged();
 	void offColorChanged();
 
+	void overflow();
+
 protected:
     QSGNode* updatePaintNode(QSGNode*, UpdatePaintNodeData*);
 
