@@ -8,8 +8,9 @@
 #include <gui/sevensegmentdisplay.hpp>
 #include <gui/displaynode_p.hpp>
 
-struct SevenSegmentDisplayPrivate
+class SevenSegmentDisplayPrivate
 {
+public:
 	SevenSegmentDisplayPrivate():
 		mDisplayNode(new DisplayNode)
 	{

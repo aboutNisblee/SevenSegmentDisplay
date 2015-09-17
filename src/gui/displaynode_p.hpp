@@ -12,7 +12,7 @@
 
 #include <memory>
 #include <algorithm>
-#include <vector>
+#include <array>
 #include <cmath>
 
 #include <QSGGeometryNode>
@@ -22,16 +22,16 @@
 namespace
 {
 /* Sizes in un-scaled coordinate system. */
-constexpr qreal baseSegLength = 2.0;
-constexpr qreal baseSegWidth = 0.60;
-constexpr qreal baseSegGap = 0.45 / 10;
-constexpr qreal baseDigitHeight = 2 * baseSegLength + baseSegWidth + 4 * baseSegGap;
+Q_CONSTEXPR qreal baseSegLength = 2.0;
+Q_CONSTEXPR qreal baseSegWidth = 0.60;
+Q_CONSTEXPR qreal baseSegGap = 0.45 / 10;
+Q_CONSTEXPR qreal baseDigitHeight = 2 * baseSegLength + baseSegWidth + 4 * baseSegGap;
 
-constexpr qreal baseDotRadius = baseSegWidth * 0.6;
-constexpr quint8 dotSegs = 24;
+Q_CONSTEXPR qreal baseDotRadius = baseSegWidth * 0.6;
+Q_CONSTEXPR quint8 dotSegs = 24;
 
 /* 0 0×3F, 1 0×06, 2 0×5B, 3 0×4F, 4 0×66, 5 0×6D, 6 0×7D, 7 0×07, 8 0×7F, 9 0×6F */
-constexpr quint8 lutSegCode[] =
+Q_CONSTEXPR quint8 lutSegCode[] =
 { 0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f };
 } // namespace
 
@@ -247,7 +247,7 @@ struct DigitNode: public QSGNode
 		static_cast<DotNode*>(lastChild())->setColor(onColor);
 	}
 
-	static constexpr qreal width()
+	static Q_DECL_CONSTEXPR qreal width()
 	{
 		return baseSegLength  + baseSegWidth  + 2 * baseSegGap  + 2 * baseDotRadius  + baseSegGap ;
 	}

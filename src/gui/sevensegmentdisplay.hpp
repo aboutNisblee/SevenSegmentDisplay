@@ -11,7 +11,6 @@
 #include <memory>
 #include <QQuickItem>
 
-class DigitNodeSettings;
 class SevenSegmentDisplayPrivate;
 
 /**
