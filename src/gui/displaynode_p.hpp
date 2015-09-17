@@ -11,6 +11,7 @@
 #include <memory>
 #include <algorithm>
 #include <vector>
+#include <cmath>
 
 #include <QSGGeometryNode>
 #include <QSGSimpleRectNode>
@@ -32,18 +33,13 @@ constexpr quint8 lutSegCode[] =
 { 0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f };
 } // namespace
 
+/** \internal Common base class for scene graph nodes. */
 template<int count>
 class ElementNode: public QSGGeometryNode
 {
 public:
 	virtual ~ElementNode() {}
-	inline QPointF getEffectiveVertex(qint8 no)
-	{
-		if (no < mGeometry->vertexCount())
-			return QPointF(mGeometry->vertexDataAsPoint2D()[no].x, mGeometry->vertexDataAsPoint2D()[no].y);
-		return QPointF();
-	}
-	/** \internal Update the foreground color of the element. */
+	/** \internal Update the color of the element. */
 	inline void setColor(const QColor& color)
 	{
 		if (mMaterial->color() == color)
@@ -52,7 +48,34 @@ public:
 		mMaterial->setColor(color);
 		markDirty(QSGNode::DirtyMaterial);
 	}
-	virtual void updateGeometry(const QMatrix& trans) = 0;
+	/** \internal Update the geometry by mapping all vertices into the coordinate system of the given matrix. */
+	inline void updateGeometry(const QMatrix& mat)
+	{
+		bool dirty = false;
+		QSGGeometry::Point2D* data = mGeometry->vertexDataAsPoint2D();
+		for (int i = 0; i < mGeometry->vertexCount(); ++i)
+		{
+			// QPointF is is actually QPointDouble! So take care in comparisons!
+			QPointF p = mat.map(mVertices[i]);
+			float pX = static_cast<float>(p.x());
+			float pY = static_cast<float>(p.y());
+			if (!qFuzzyCompare(pX, data[i].x) || !qFuzzyCompare(pY, data[i].y))
+			{
+				data[i].set(pX, pY);
+				dirty = true;
+			}
+		}
+
+		if (dirty)
+			markDirty(QSGNode::DirtyGeometry);
+	}
+	/** \internal Returns the effective vertex position (only for debugging). */
+	inline QPointF getEffectiveVertex(qint8 no)
+	{
+		if (no < mGeometry->vertexCount())
+			return QPointF(mGeometry->vertexDataAsPoint2D()[no].x, mGeometry->vertexDataAsPoint2D()[no].y);
+		return QPointF();
+	}
 protected:
 	std::array<QPointF, count> mVertices;
 	std::unique_ptr<QSGGeometry> mGeometry;
@@ -90,29 +113,9 @@ struct SegmentNode: public ElementNode<6>
 				v = m.map(v);
 		}
 	}
-	/** \internal Update the geometry by mapping the current segment into the coordinate system of the given matrix. */
-	inline void updateGeometry(const QMatrix& trans)
-	{
-		bool dirty = false;
-		QSGGeometry::Point2D* data = mGeometry->vertexDataAsPoint2D();
-		for (int i = 0; i < mGeometry->vertexCount(); ++i)
-		{
-			// QPointF is is actually QPointDouble! So take care in comparisons!
-			QPointF p = trans.map(mVertices[i]);
-			float pX = static_cast<float>(p.x());
-			float pY = static_cast<float>(p.y());
-			if (pX != data[i].x || pY != data[i].y)
-			{
-				data[i].set(pX, pY);
-				dirty = true;
-			}
-		}
-
-		if (dirty)
-			markDirty(QSGNode::DirtyGeometry);
-	}
 };
 
+/** \internal Scene graph geometry node of a dot. */
 struct DotNode: public ElementNode < dotSegs + 2 >
 {
 	DotNode()
@@ -129,39 +132,15 @@ struct DotNode: public ElementNode < dotSegs + 2 >
 		for (int i = 2; i < dotSegs + 2; ++i)
 			mVertices[i] = m.map(mVertices[i - 1]);
 	}
-	/** \internal Update the geometry by mapping the current segment into the coordinate system of the given matrix. */
-	inline void updateGeometry(const QMatrix& trans)
-	{
-		bool dirty = false;
-		QSGGeometry::Point2D* data = mGeometry->vertexDataAsPoint2D();
-		for (int i = 0; i < mGeometry->vertexCount(); ++i)
-		{
-			// QPointF is is actually QPointDouble! So take care in comparisons!
-			QPointF p = trans.map(mVertices[i]);
-			float pX = static_cast<float>(p.x());
-			float pY = static_cast<float>(p.y());
-			if (pX != data[i].x || pY != data[i].y)
-			{
-				data[i].set(pX, pY);
-				dirty = true;
-			}
-		}
-
-		if (dirty)
-			markDirty(QSGNode::DirtyGeometry);
-	}
 };
 
-/** \internal Scene graph node of a digit (7 segments + dot). */
-struct DigitNode: public QSGSimpleRectNode
+/** \internal Scene graph node for a single digit (7 segments + dot). */
+struct DigitNode: public QSGNode
 {
-	/** \internal Construct a new digit.
-	 * \note The node is typically owned by the render thread. To easily share the
-	 * property values of the client with the node in the render thread, a DigitNodeSettings object is used.
-	 * Synchronization inst needed since the GUI thread is locked while the the digit node accesses the settings object.
-	 */
+	/** \internal Construct a new digit. */
 	DigitNode()
 	{
+		// Lifetime is managed by scene graph
 		appendChildNode(new SegmentNode());
 		appendChildNode(new SegmentNode(90));
 		appendChildNode(new SegmentNode(90));
@@ -170,60 +149,54 @@ struct DigitNode: public QSGSimpleRectNode
 		appendChildNode(new SegmentNode(90));
 		appendChildNode(new SegmentNode());
 		appendChildNode(new DotNode);
-
-		setColor(Qt::transparent);
 	}
 
-	/** \internal Update the state of the node and all its children.
-	 * Things are only updated when the settings differ from last call.
-	 * @param rectangle The current binding rectangle of the caller.
+	/** \internal Update the geometry of this digit.
+	 * \param rectangle A rectangle in which to layout the digit.
+	 * \param scale The factor to adjust the basic segment sizes.
 	 */
-	inline void update(qreal scale)
+	inline void updateGeometry(QRectF rectangle, qreal scale)
 	{
-		// Scale all segment sizes, needed for positioning
 		qreal segWidth = baseSegWidth * scale;
 		qreal segLength = baseSegLength * scale;
 		qreal segGap = baseSegGap * scale;
 		qreal dotRadius = baseDotRadius * scale;
-		// Create a scale matrix, needed to scale basic vertices
-		QMatrix matScale = QMatrix().scale(scale, scale);
 
-		qreal digitCenterX = rect().center().x() - (2 * dotRadius + segGap) / 2;
-		qreal digitCenterY = rect().center().y();
+		/* Segments are positioned around the center of the digit, excluding the dot.
+		 * So the digit center must be left justified by the half of the space the dot needs. */
+		qreal digitCenterX = rectangle.center().x() - (2 * dotRadius + segGap) / 2;
+		qreal digitCenterY = rectangle.center().y();
 
 		Q_ASSERT(8 == childCount());
 
+		// QMatrix(qreal m11, qreal m12, qreal m21, qreal m22, qreal dx, qreal dy)
+		// ->       hScaling, vShearing, hShearing,  vScaling,   hTrans,   vTrans
+
 		// (A) top
-		static_cast<SegmentNode*>(childAtIndex(0))->updateGeometry(matScale * QMatrix().translate(digitCenterX,
+		static_cast<SegmentNode*>(childAtIndex(0))->updateGeometry(QMatrix(scale, 0, 0, scale, digitCenterX,
 		        digitCenterY - segLength - segGap * 2));
 		// (B) top right
-		static_cast<SegmentNode*>(childAtIndex(1))->updateGeometry(matScale * QMatrix().translate(
-		            digitCenterX + segLength / 2 + segGap,
-		            digitCenterY - segLength / 2 - segGap));
+		static_cast<SegmentNode*>(childAtIndex(1))->updateGeometry(QMatrix(scale, 0, 0, scale,
+		        digitCenterX + segLength / 2 + segGap, digitCenterY - segLength / 2 - segGap));
 		// (C) bottom right
-		static_cast<SegmentNode*>(childAtIndex(2))->updateGeometry(matScale * QMatrix().translate(
-		            digitCenterX + segLength / 2 + segGap,
-		            digitCenterY + segLength / 2 + segGap));
+		static_cast<SegmentNode*>(childAtIndex(2))->updateGeometry(QMatrix(scale, 0, 0, scale,
+		        digitCenterX + segLength / 2 + segGap, digitCenterY + segLength / 2 + segGap));
 		// (D) bottom
-		static_cast<SegmentNode*>(childAtIndex(3))->updateGeometry(matScale * QMatrix().translate(digitCenterX,
+		static_cast<SegmentNode*>(childAtIndex(3))->updateGeometry(QMatrix(scale, 0, 0, scale, digitCenterX,
 		        digitCenterY + segLength + segGap * 2));
 		// (E) bottom left
-		static_cast<SegmentNode*>(childAtIndex(4))->updateGeometry(matScale * QMatrix().translate(
-		            digitCenterX - segLength / 2 - segGap,
-		            digitCenterY + segLength / 2 + segGap));
+		static_cast<SegmentNode*>(childAtIndex(4))->updateGeometry(QMatrix(scale, 0, 0, scale,
+		        digitCenterX - segLength / 2 - segGap, digitCenterY + segLength / 2 + segGap));
 		// (F) top left
-		static_cast<SegmentNode*>(childAtIndex(5))->updateGeometry(matScale * QMatrix().translate(
-		            digitCenterX - segLength / 2 - segGap,
-		            digitCenterY - segLength / 2 - segGap));
+		static_cast<SegmentNode*>(childAtIndex(5))->updateGeometry(QMatrix(scale, 0, 0, scale,
+		        digitCenterX - segLength / 2 - segGap, digitCenterY - segLength / 2 - segGap));
 		// (G) middle
-		static_cast<SegmentNode*>(childAtIndex(6))->updateGeometry(matScale * QMatrix().translate(digitCenterX,
-		        digitCenterY));
+		static_cast<SegmentNode*>(childAtIndex(6))->updateGeometry(QMatrix(scale, 0, 0, scale, digitCenterX, digitCenterY));
 
 		// The dot is always laid out. Appearance is controlled by color.
-		static_cast<DotNode*>(childAtIndex(7))->updateGeometry(matScale * QMatrix().translate(
-		            digitCenterX + segLength / 2 + segGap + segWidth / 2 + dotRadius +
-		            segGap,
-		            digitCenterY + segLength + 2 * segGap + segWidth / 2 - dotRadius));
+		static_cast<DotNode*>(childAtIndex(7))->updateGeometry(QMatrix(scale, 0, 0, scale,
+		        digitCenterX + segLength / 2 + segGap + segWidth / 2 + dotRadius +
+		        segGap, digitCenterY + segLength + 2 * segGap + segWidth / 2 - dotRadius));
 
 #if 0
 		qDebug() << "Effective digit size:" << static_cast<SegmentNode*>(childAtIndex(3))->getEffectiveVertex(
@@ -232,7 +205,7 @@ struct DigitNode: public QSGSimpleRectNode
 #endif
 	}
 
-	inline void setValue(int value, QColor onColor, QColor offColor)
+	inline void setValue(int value, const QColor& onColor, const QColor& offColor)
 	{
 		Q_ASSERT(8 == childCount());
 
@@ -252,7 +225,11 @@ struct DigitNode: public QSGSimpleRectNode
 			qWarning() << "Invalid value" << value;
 		}
 
-		// TODO!
+		static_cast<DotNode*>(lastChild())->setColor(offColor);
+	}
+
+	inline void setDot(const QColor& onColor)
+	{
 		static_cast<DotNode*>(lastChild())->setColor(onColor);
 	}
 
@@ -262,7 +239,7 @@ struct DigitNode: public QSGSimpleRectNode
 	}
 };
 
-/** \internal Root scene graph node if the display. */
+/** \internal Root scene graph node of the display. */
 class DisplayNode: public QSGSimpleRectNode
 {
 public:
@@ -283,12 +260,22 @@ public:
 		return true;
 	}
 
-	inline int getValue() const { return mValue; }
-	inline bool setValue(int value)
+	inline double getValue() const { return mValue; }
+	inline bool setValue(double value)
 	{
 		if (value == mValue)
 			return false;
 		mValue = value;
+		mSegmentsDirty = true;
+		return true;
+	}
+
+	inline int getPrecision() const { return mValue; }
+	inline bool setPrecision(int precision)
+	{
+		if (precision == mPrecision)
+			return false;
+		mPrecision = precision;
 		mSegmentsDirty = true;
 		return true;
 	}
@@ -358,16 +345,24 @@ public:
 		return true;
 	}
 
+	/** \internal Update the display.
+	 * This method should be called from render thread.
+	 * @param boundingRectange The bounding rectangle of the widget.
+	 * @return The content size. Can be used to set the implicitSize of the widget.
+	 */
 	QSizeF update(const QRectF& boundingRectange)
 	{
 		if (0 == childCount())
 			return QSizeF();
 
+		if (rect() != boundingRectange)
+			mGeometryDirty = true;
+
 		if (mGeometryDirty)
 		{
 			// Calculate content size
-			mContentRect.setWidth(DigitNode::width() * mScale * childCount());
 			mContentRect.setHeight(mDigitSize);
+			mContentRect.setWidth(DigitNode::width() * mScale * childCount());
 
 			// Update rectangle of the background to the maximum of the size of the given rectangle and the content size
 			if (rect().size() != mContentRect.size().expandedTo(boundingRectange.size()))
@@ -412,27 +407,47 @@ public:
 			}
 		} // geometry update
 
-		// Split the content pane into digit parts
-		QRectF digitRect = mContentRect;
-		digitRect.setWidth(digitRect.width() / childCount());
-
-		// Update digits
-		for (int i = 0; i < childCount(); ++i)
+		// Update geometry of digits
+		if (mGeometryDirty)
 		{
-			DigitNode* digit = static_cast<DigitNode*>(childAtIndex(i));
+			// Split the content area into digit parts
+			QRectF digitRect = mContentRect;
+			digitRect.setWidth(digitRect.width() / childCount());
 
-			if (mGeometryDirty)
+			for (int i = 0; i < childCount(); ++i)
 			{
-				// Move digit rect to the right position
+				DigitNode* digit = static_cast<DigitNode*>(childAtIndex(i));
+
+				// Move digit rectangle to the right position
 				QRectF rect = digitRect;
 				rect.moveLeft(rect.left() + rect.width() * i);
-				digit->setRect(rect);
-
-				digit->update(mScale);
+				digit->updateGeometry(rect, mScale);
 			}
+		}
 
-			if (mSegmentsDirty)
-				digit->setValue(mValue, mOnColor, mOffColor);
+		/* TODO: This is crap! No negative values, overflow problems and no literals
+		 * Maybe better work on strings?! Have a look at the implementation of QLCDNumber. */
+		if (mSegmentsDirty)
+		{
+			double integral = 0;
+			double fraction = std::modf(mValue, &integral);
+
+			int pos = setInteger(0, childCount() - mPrecision, std::abs(static_cast<quint64>(integral)));
+
+			if (mPrecision > childCount())
+				qWarning() << "Invalid precision:" << mPrecision << "( digitCount:" << childCount() << ")";
+			else if (mPrecision > 0 && mPrecision <= childCount())
+			{
+				// Set dot
+				if (pos > 0)
+				{
+					DigitNode* digit = static_cast<DigitNode*>(childAtIndex(pos - 1));
+					digit->setDot(mOnColor);
+				}
+
+				quint64 fracAsInt = std::round(fraction * std::pow(10, mPrecision));
+				setInteger(pos, childCount(), fracAsInt);
+			}
 		}
 
 		mGeometryDirty = false;
@@ -442,7 +457,28 @@ public:
 	}
 
 private:
-	int mValue = 0;
+	int setInteger(int first, int last, quint64 value)
+	{
+		if (first < last)
+		{
+			if (static_cast<quint64>(std::log10(value)) + 1 > last - first)
+			{
+				qWarning() << "Overflow at:" << value;
+				value = value % static_cast<quint64>(std::pow(10, last - first));
+			}
+
+			//			qDebug() << "Pos:" << first << ":" << static_cast<int>(value / std::pow(10, last - first - 1));
+
+			DigitNode* digit = static_cast<DigitNode*>(childAtIndex(first));
+			digit->setValue(value / std::pow(10, last - first - 1), mOnColor, mOffColor);
+			return setInteger(first + 1, last, std::fmod(value, std::pow(10, last - first - 1)));
+		}
+		else
+			return first;
+	}
+
+	double mValue;
+	int mPrecision = 0;
 	int mDigitSize = 24;
 	SevenSegmentDisplay::Alignment mHAlignment = SevenSegmentDisplay::AlignLeft;
 	SevenSegmentDisplay::Alignment mVAlignment = SevenSegmentDisplay::AlignTop;

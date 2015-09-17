@@ -36,21 +36,36 @@ int SevenSegmentDisplay::getDigitCount() const { Q_D(const SevenSegmentDisplay);
 void SevenSegmentDisplay::setDigitCount(int count)
 {
 	Q_D(SevenSegmentDisplay);
-	if(d->mDisplayNode->setDigitCount(count))
+	if(count < 0)
+		qWarning() << "Digit count cannot be negative";
+	else if (d->mDisplayNode->setDigitCount(count))
 	{
 		update();
 		emit digitCountChanged();
 	}
 }
 
-int SevenSegmentDisplay::getValue() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getValue(); }
-void SevenSegmentDisplay::setValue(int value)
+double SevenSegmentDisplay::getValue() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getValue(); }
+void SevenSegmentDisplay::setValue(double value)
 {
 	Q_D(SevenSegmentDisplay);
 	if(d->mDisplayNode->setValue(value))
 	{
 		update();
 		emit valueChanged();
+	}
+}
+
+int SevenSegmentDisplay::getPrecision() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getPrecision(); }
+void SevenSegmentDisplay::setPrecision(int precision)
+{
+	Q_D(SevenSegmentDisplay);
+	if(precision < 0)
+		qWarning() << "Precision cannot be negative";
+	else if(d->mDisplayNode->setPrecision(precision))
+	{
+		update();
+		emit precisionChanged();
 	}
 }
 

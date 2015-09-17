@@ -25,7 +25,8 @@ class SevenSegmentDisplay : public QQuickItem
 
 	/** Property that controls the current value shown by the widget.
 	 * @note Currently only values from 0 to 9 are supported. */
-	Q_PROPERTY(int value READ getValue WRITE setValue NOTIFY valueChanged)
+	Q_PROPERTY(double value READ getValue WRITE setValue NOTIFY valueChanged)
+	Q_PROPERTY(int precision READ getPrecision WRITE setPrecision NOTIFY precisionChanged)
     /** Property that controls the digit height. */
 	Q_PROPERTY(int digitSize READ getDigitSize WRITE setDigitSize NOTIFY digitSizeChanged)
 
@@ -59,24 +60,35 @@ public:
 
     int getDigitCount() const;
     void setDigitCount(int count);
-    int getValue() const;
-    void setValue(int value);
+
+    double getValue() const;
+    void setValue(double value);
+
+    int getPrecision() const;
+    void setPrecision(int precision);
+
     int getDigitSize() const;
     void setDigitSize(int size);
+
     Alignment getVerticalAlignment() const;
     void setVerticalAlignment(Alignment alignment);
+
     Alignment getHorizontalAlignment() const;
     void setHorizontalAlignment(Alignment alignment);
+
     QColor getBgColor() const;
     void setBgColor(const QColor& color);
+
     QColor getOnColor() const;
     void setOnColor(const QColor& color);
+
     QColor getOffColor() const;
     void setOffColor(const QColor& color);
 
 signals:
 	void digitCountChanged();
 	void valueChanged();
+	void precisionChanged();
 	void digitSizeChanged();
 	void verticalAlignmentChanged();
 	void horizontalAlignmentChanged();

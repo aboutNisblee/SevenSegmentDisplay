@@ -34,10 +34,10 @@ Window {
             horizontalAlignment: SevenSegmentDisplay.AlignCenter
 
             value: 0
-//            onValueChanged: {
-//                if (!(value % 2))
-//                    visible = !visible
-//            }
+            //            onValueChanged: {
+            //                if (!(value % 2))
+            //                    visible = !visible
+            //            }
         }
 
         Column {
@@ -56,14 +56,15 @@ Window {
                 height: parent.height / 2
 
                 digitSize: 60
-                digitCount: 4
-                bgColor: "orange"
+                digitCount: 6
+                precision: 2
+                bgColor: "gray"
                 onColor: "green"
                 offColor: "gray"
                 verticalAlignment: SevenSegmentDisplay.AlignCenter
                 horizontalAlignment: SevenSegmentDisplay.AlignCenter
 
-                value: 0
+                value: 3.14
             }
 
             Text {
@@ -83,14 +84,14 @@ Window {
 
     Timer {
         id: timer
-        interval: 250
+        interval: 500
         repeat: true
         running: true
         property int i: 0
         onTriggered: {
-            i = (i + 1) % 10
+            i = (i + 1) % 100
             digit.value = i
-            digit2.value = i
+            digit2.value = digit2.value * 2
             text.text = i
         }
     }
