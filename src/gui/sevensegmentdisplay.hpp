@@ -20,18 +20,17 @@ class SevenSegmentDisplay : public QQuickItem
 {
     Q_OBJECT
 
+	/** Property that controls the count of digits.
+	 * TODO: Automatically adjust the digit count, when value is invalid (e.g. negative or ?zero?) */
 	Q_PROPERTY(int digitCount READ getDigitCount WRITE setDigitCount NOTIFY digitCountChanged)
 
-	/** Property that controls the current value shown by the widget.
-	 * @note Currently only values from 0 to 9 are supported. */
+	/** Property that controls the current value shown by the widget. */
 	Q_PROPERTY(double value READ getValue WRITE setValue NOTIFY valueChanged)
+	Q_PROPERTY(QString string READ getString WRITE setString NOTIFY stringChanged)
+
 	Q_PROPERTY(int precision READ getPrecision WRITE setPrecision NOTIFY precisionChanged)
     /** Property that controls the digit height. */
 	Q_PROPERTY(int digitSize READ getDigitSize WRITE setDigitSize NOTIFY digitSizeChanged)
-
-	// TODO: Add content sized. This is the size of the digits and also the item size if not specified and bigger.
-//	Q_PROPERTY(int contentWidth READ getContentWidth NOTIFY contentWidthChanged)
-//	Q_PROPERTY(int contentHeight READ getContentHeight NOTIFY contentHeightChanged)
 
 	Q_ENUMS(Alignment)
 	/** Property that controls the vertical alignment. */
@@ -63,6 +62,9 @@ public:
     double getValue() const;
     void setValue(double value);
 
+    QString getString() const;
+    void setString(QString string);
+
     int getPrecision() const;
     void setPrecision(int precision);
 
@@ -87,6 +89,7 @@ public:
 signals:
 	void digitCountChanged();
 	void valueChanged();
+	void stringChanged();
 	void precisionChanged();
 	void digitSizeChanged();
 	void verticalAlignmentChanged();

@@ -17,8 +17,43 @@ public:
 	}
 	Q_DISABLE_COPY(SevenSegmentDisplayPrivate)
 
-	// Owned by scene graph
-	DisplayNode* mDisplayNode;
+	bool display(QVariant v)
+	{
+		bool updateNeeded = false;
+
+		mCurrentValue = v;
+
+		// Update value
+		switch (v.type())
+		{
+		case QVariant::Double:
+		{
+			QString s;
+
+			/* NOTE: In no case does a nonexistent or small field width cause truncation of a field; if the result of a con‐
+			 * version is wider than the field width, the field is expanded to contain the conversion result. */
+			if (mPrecision > 0)
+				s.sprintf("%*.*f", mDisplayNode->getDigitCount() + 1 - mPrecision, mPrecision, v.toDouble());
+			else
+				s.sprintf("%*.0f", mDisplayNode->getDigitCount(), v.toDouble());
+
+			updateNeeded =  mDisplayNode->setString(s);
+		}
+		break;
+		case QVariant::String:
+			updateNeeded =  mDisplayNode->setString(v.toString());
+			break;
+		default:
+			qWarning() << "BUG: Unhandled type in mCurrentValue: (" << v.typeName() << ")";
+			break;
+		}
+
+		return updateNeeded;
+	}
+
+	DisplayNode* mDisplayNode; // Owned by scene graph
+	QVariant mCurrentValue;
+	int mPrecision = 0;
 };
 
 SevenSegmentDisplay::SevenSegmentDisplay(QQuickItem* parent) :
@@ -37,36 +72,66 @@ int SevenSegmentDisplay::getDigitCount() const { Q_D(const SevenSegmentDisplay);
 void SevenSegmentDisplay::setDigitCount(int count)
 {
 	Q_D(SevenSegmentDisplay);
-	if(count < 0)
+	if (count < 0)
 		qWarning() << "Digit count cannot be negative";
 	else if (d->mDisplayNode->setDigitCount(count))
 	{
 		update();
 		emit digitCountChanged();
+
+		// Update value
+		d->display(d->mCurrentValue);
 	}
 }
 
-double SevenSegmentDisplay::getValue() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getValue(); }
+double SevenSegmentDisplay::getValue() const
+{
+	Q_D(const SevenSegmentDisplay);
+	bool ok = false;
+	double result = d->mDisplayNode->getString().toDouble(&ok);
+	if (ok)
+		return result;
+	else
+		return 0;
+}
 void SevenSegmentDisplay::setValue(double value)
 {
 	Q_D(SevenSegmentDisplay);
-	if(d->mDisplayNode->setValue(value))
+	if (d->display(QVariant(value)))
 	{
 		update();
 		emit valueChanged();
 	}
 }
 
-int SevenSegmentDisplay::getPrecision() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getPrecision(); }
+QString SevenSegmentDisplay::getString() const { Q_D(const SevenSegmentDisplay); return d->mDisplayNode->getString(); }
+void SevenSegmentDisplay::setString(QString string)
+{
+	Q_D(SevenSegmentDisplay);
+
+	// TODO: Check if string is printable or is it the responsibility of the node?
+	if (d->display(QVariant(string)))
+	{
+		update();
+		emit stringChanged();
+	}
+}
+
+int SevenSegmentDisplay::getPrecision() const { Q_D(const SevenSegmentDisplay); return d->mPrecision; }
 void SevenSegmentDisplay::setPrecision(int precision)
 {
 	Q_D(SevenSegmentDisplay);
-	if(precision < 0)
+	if (precision < 0)
 		qWarning() << "Precision cannot be negative";
-	else if(d->mDisplayNode->setPrecision(precision))
+	else if (d->mPrecision != precision)
 	{
-		update();
+		d->mPrecision = precision;
+
 		emit precisionChanged();
+
+		// Update value
+		if (d->display(d->mCurrentValue))
+			update();
 	}
 }
 
@@ -74,7 +139,7 @@ int SevenSegmentDisplay::getDigitSize() const { Q_D(const SevenSegmentDisplay); 
 void SevenSegmentDisplay::setDigitSize(int size)
 {
 	Q_D(SevenSegmentDisplay);
-	if(d->mDisplayNode->setDigitSize(size))
+	if (d->mDisplayNode->setDigitSize(size))
 	{
 		update();
 		emit digitSizeChanged();
@@ -85,7 +150,7 @@ SevenSegmentDisplay::Alignment SevenSegmentDisplay::getVerticalAlignment() const
 void SevenSegmentDisplay::setVerticalAlignment(Alignment alignment)
 {
 	Q_D(SevenSegmentDisplay);
-	if(d->mDisplayNode->setVAlignment(alignment))
+	if (d->mDisplayNode->setVAlignment(alignment))
 	{
 		update();
 		emit verticalAlignmentChanged();
@@ -96,7 +161,7 @@ SevenSegmentDisplay::Alignment SevenSegmentDisplay::getHorizontalAlignment() con
 void SevenSegmentDisplay::setHorizontalAlignment(Alignment alignment)
 {
 	Q_D(SevenSegmentDisplay);
-	if(d->mDisplayNode->setHAlignment(alignment))
+	if (d->mDisplayNode->setHAlignment(alignment))
 	{
 		update();
 		emit horizontalAlignmentChanged();
@@ -107,7 +172,7 @@ QColor SevenSegmentDisplay::getBgColor() const { Q_D(const SevenSegmentDisplay);
 void SevenSegmentDisplay::setBgColor(const QColor& color)
 {
 	Q_D(SevenSegmentDisplay);
-	if(d->mDisplayNode->setBgColor(color))
+	if (d->mDisplayNode->setBgColor(color))
 	{
 		update();
 		emit bgColorChanged();
@@ -118,7 +183,7 @@ QColor SevenSegmentDisplay::getOnColor() const { Q_D(const SevenSegmentDisplay);
 void SevenSegmentDisplay::setOnColor(const QColor& color)
 {
 	Q_D(SevenSegmentDisplay);
-	if(d->mDisplayNode->setOnColor(color))
+	if (d->mDisplayNode->setOnColor(color))
 	{
 		update();
 		emit onColorChanged();
@@ -129,7 +194,7 @@ QColor SevenSegmentDisplay::getOffColor() const { Q_D(const SevenSegmentDisplay)
 void SevenSegmentDisplay::setOffColor(const QColor& color)
 {
 	Q_D(SevenSegmentDisplay);
-	if(d->mDisplayNode->setOffColor(color))
+	if (d->mDisplayNode->setOffColor(color))
 	{
 		update();
 		emit offColorChanged();

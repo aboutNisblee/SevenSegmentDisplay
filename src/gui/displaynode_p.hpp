@@ -207,13 +207,17 @@ struct DigitNode: public QSGNode
 #endif
 	}
 
-	inline void setValue(quint8 value, const QColor& onColor, const QColor& offColor)
+	/* These digits and other symbols can be shown: 0/O, 1, 2, 3, 4, 5/S, 6, 7, 8, 9/g, minus, decimal point,
+	 * A, B, C, D, E, F, h, H, L, o, P, r, u, U, Y, colon, degree sign
+	 * (which is specified as single quote in the string) and space. */
+	inline void display(const QChar c, const QColor& onColor, const QColor& offColor)
 	{
 		Q_ASSERT(8 == childCount());
 
-		if (value < 10)
+
+		if (c.isDigit()) // Digit: 0-9
 		{
-			quint8 code = lutSegCode[value];
+			quint8 code = lutSegCode[c.digitValue()];
 			quint8 mask = 0x01;
 			for (quint8 i = 0; i < 7; ++i)
 			{
@@ -224,25 +228,28 @@ struct DigitNode: public QSGNode
 		}
 		else
 		{
-			qWarning() << "Invalid value" << value;
+			// Disable all
+			for (quint8 i = 0; i < 7; ++i)
+			{
+				static_cast<SegmentNode*>(childAtIndex(i))->setColor(offColor);
+			}
+
+			if (c == '-')
+				static_cast<SegmentNode*>(childAtIndex(6))->setColor(onColor);
+			else if(c == '.')
+			{
+				// Enable dot in previous sibling
+				DigitNode* pre = static_cast<DigitNode*>(previousSibling());
+				if(pre)
+					static_cast<DotNode*>(pre->lastChild())->setColor(onColor);
+			}
 		}
 
 		// Disable dot
 		static_cast<DotNode*>(lastChild())->setColor(offColor);
 	}
 
-	inline void setMinus(const QColor& onColor, const QColor& offColor)
-	{
-		for (quint8 i = 0; i < 7; ++i)
-		{
-			/* Segment material is only marked dirty, when color is changed. */
-			static_cast<SegmentNode*>(childAtIndex(i))->setColor((6 == i) ? onColor : offColor);
-		}
-		// Disable dot
-		static_cast<DotNode*>(lastChild())->setColor(offColor);
-	}
-
-	inline void setDot(const QColor& onColor)
+	inline void enableDot(const QColor& onColor)
 	{
 		static_cast<DotNode*>(lastChild())->setColor(onColor);
 	}
@@ -269,24 +276,31 @@ public:
 		return true;
 	}
 
-	inline double getValue() const { return mValue; }
-	inline bool setValue(double value)
+	inline QString getString() const { return mString; }
+	inline bool setString(QString string)
 	{
-		if (value == mValue)
-			return false;
-		mValue = value;
-		mSegmentsDirty = true;
-		return true;
-	}
+		// Detect overflow; and fill leading digits with ' '
+		// TODO: Maybe use QRegExp("[\.,]")
+		int dots = string.count('.');
+		if (dots)
+			qDebug() << "Dots found:" << dots;
 
-	inline int getPrecision() const { return mPrecision; }
-	inline bool setPrecision(int precision)
-	{
-		if (precision == mPrecision)
+		if (string.size() < mDigitCount + dots)
+			string = string.right(mDigitCount + dots).rightJustified(mDigitCount + dots, QLatin1Char(' '));
+		else if (string.size() > mDigitCount + dots)
+		{
+			string = string.left(mDigitCount + dots);
+			emit overflow();
+		}
+
+		if (string != mString)
+		{
+			mString = string;
+			mSegmentsDirty = true;
+			return true;
+		}
+		else
 			return false;
-		mPrecision = precision;
-		mSegmentsDirty = true;
-		return true;
 	}
 
 	inline int getDigitSize() const { return mDigitSize; }
@@ -442,30 +456,19 @@ public:
 			}
 		}
 
-		/* TODO: This is crap! No negative values, overflow problems and no literals
-		 * Maybe better work on strings?! Have a look at the implementation of QLCDNumber. */
 		if (mSegmentsDirty)
 		{
-			double integral = 0;
-			double fraction = std::modf(mValue, &integral);
-
-			int pos = setInteger(0, childCount() - mPrecision, static_cast<qint64>(integral));
-			if (pos >= 0)
+			qDebug() << "Display (" << mDigitCount << "):" << mString;
+			for (int i = 0, k = 0; i < mDigitCount && k < mString.size(); ++i, ++k)
 			{
-				if (mPrecision > childCount())
-					qWarning() << "Invalid precision:" << mPrecision << "( digitCount:" << childCount() << ")";
-				else if (mPrecision > 0 && mPrecision <= childCount())
+				if (mString[k].toLatin1() == '.')
 				{
-					// Set dot
-					if (pos > 0)
-					{
-						DigitNode* digit = static_cast<DigitNode*>(childAtIndex(pos - 1));
-						digit->setDot(mOnColor);
-					}
-
-					qint64 fracAsInt = std::round(fraction * std::pow(10, mPrecision));
-					setInteger(pos, childCount(), fracAsInt);
+					Q_ASSERT(i > 0);
+					static_cast<DigitNode*>(childAtIndex(i - 1))->enableDot(mOnColor);
+					++k;
 				}
+
+				static_cast<DigitNode*>(childAtIndex(i))->display(mString[k].toLatin1(), mOnColor, mOffColor);
 			}
 		}
 
@@ -483,45 +486,8 @@ signals:
 	void overflow();
 
 private:
-	int setInteger(int first, int last, qint64 value)
-	{
-		if (first < last)
-		{
-			int neededPositions = 1;
-			if (value != 0)
-				neededPositions = static_cast<int>(std::log10(std::abs(value))) + ((value < 0) ? 2 : 1);
-
-			if (neededPositions > last - first)
-			{
-				emit overflow();
-				//				value = value % static_cast<qint64>(std::pow(10, last - first));
-				for (int i = 0; i < childCount(); ++i)
-					static_cast<DigitNode*>(childAtIndex(i))->setMinus(mOnColor, mOffColor);
-				return -1;
-			}
-
-			if (value < 0)
-			{
-				DigitNode* digit = static_cast<DigitNode*>(childAtIndex(first));
-				digit->setMinus(mOnColor, mOffColor);
-				++first;
-
-				value = std::abs(value);
-			}
-
-			//			qDebug() << "Pos:" << first << ":" << static_cast<int>(value / std::pow(10, last - first - 1));
-
-			DigitNode* digit = static_cast<DigitNode*>(childAtIndex(first));
-			digit->setValue(value / std::pow(10, last - first - 1), mOnColor, mOffColor);
-			return setInteger(first + 1, last, static_cast<qint64>(std::fmod(value, std::pow(10, last - first - 1))));
-		}
-		else
-			return first;
-	}
-
-	double mValue;
-	int mDigitCount = 1;
-	int mPrecision = 0;
+	QString mString;
+	int mDigitCount = 4;
 	int mDigitSize = 24;
 	SevenSegmentDisplay::Alignment mHAlignment = SevenSegmentDisplay::AlignLeft;
 	SevenSegmentDisplay::Alignment mVAlignment = SevenSegmentDisplay::AlignTop;

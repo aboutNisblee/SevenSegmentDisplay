@@ -67,7 +67,7 @@ Window {
             minimumValue: 0
             tickmarksEnabled: true
             stepSize: 1
-            value: 3
+            value: 4
         }
 
         Label {
@@ -91,11 +91,17 @@ Window {
             }
             orientation: Qt.Vertical
             maximumValue: (sliderDigitCount.value - 1 < 0) ? 0 : sliderDigitCount.value - 1
+            //            maximumValue: sliderDigitCount.value
             minimumValue: 0
             tickmarksEnabled: true
             stepSize: 1
-            value: 0
-            onMaximumValueChanged: value = Math.min(value, maximumValue)
+            value: 2
+            onMaximumValueChanged: {
+                //                console.log("onMaximumValueChanged to " + maximumValue
+                //                            + " current value " + value + " choosing " + Math.min(
+                //                                value, maximumValue))
+                value = Math.min(value, maximumValue)
+            }
         }
     }
 
@@ -124,7 +130,8 @@ Window {
             verticalAlignment: SevenSegmentDisplay.AlignCenter
             horizontalAlignment: SevenSegmentDisplay.AlignCenter
 
-            value: 0
+            value: -3.14
+            //            string: "AF"
             onOverflow: console.log("digit: overflow")
         }
     }
