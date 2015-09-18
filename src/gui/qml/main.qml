@@ -90,7 +90,7 @@ Window {
                 bottom: parent.bottom
             }
             orientation: Qt.Vertical
-            maximumValue: sliderDigitCount.value - 1
+            maximumValue: (sliderDigitCount.value - 1 < 0) ? 0 : sliderDigitCount.value - 1
             minimumValue: 0
             tickmarksEnabled: true
             stepSize: 1

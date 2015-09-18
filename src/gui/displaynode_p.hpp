@@ -279,7 +279,7 @@ public:
 		return true;
 	}
 
-	inline int getPrecision() const { return mValue; }
+	inline int getPrecision() const { return mPrecision; }
 	inline bool setPrecision(int precision)
 	{
 		if (precision == mPrecision)
