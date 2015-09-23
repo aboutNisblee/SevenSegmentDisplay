@@ -1,8 +1,8 @@
-cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 2.8.12 FATAL_ERROR)
 
 project(SevenSegmentDisplay)
 
-find_package(Qt5 REQUIRED COMPONENTS Qml Quick Test Sql)
+find_package(Qt5 REQUIRED COMPONENTS Qml Quick)
 
 # Find includes in corresponding build directories
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -35,11 +35,6 @@ if(CMAKE_BUILD_TYPE MATCHES "Debug")
 	# Enable creation of tests
 	set(MELP_TEST_CREATION ON)
 else()
-	# Change output directory for release builds
-	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
-	# Ensure directory is present
-	file(MAKE_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
-    
     # Disable qDebug output in release builds
     add_definitions(-DQT_NO_DEBUG_OUTPUT)
 endif()
@@ -69,5 +64,5 @@ qt5_add_resources(QRCS
 )
 melp_print_list(QRCS "Resource files" SEPERATOR HALFINDENT)
 
-add_executable(${PROJECT_NAME} ${SRCS} ${QRCS})
-target_link_libraries(${PROJECT_NAME} Qt5::Qml Qt5::Quick Qt5::Sql)
+add_executable(SevenSegmentDisplayDemo ${SRCS} ${QRCS})
+target_link_libraries(SevenSegmentDisplayDemo Qt5::Qml Qt5::Quick)
