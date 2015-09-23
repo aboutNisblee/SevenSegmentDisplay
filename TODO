@@ -1,9 +1,18 @@
-[ ]	Add the dot.
+[X]	Add the dot.
+[X]	Add a node above DigitNode that handles multiple digit displays.
 
-[ ]	Add a node above DigitNode that handles multiple digit displays.
+[X] Complete the demo pane.
 
-[ ]	Make example from main.cpp.
+[ ]	Add Readme.md.
+
+[ ] Change license to LGPL.
+[ ]	Add license text to all files.
 
 [ ]	Add plugin code.
+[ ]	Make example from main.cpp.
 
-[ ]	Add license to all files.
+[ ] Add literal support.
+
+[ ] Add some other alignment options.
+
+[ ] Add automatic digit count adaption.

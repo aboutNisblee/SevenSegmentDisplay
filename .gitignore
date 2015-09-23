@@ -22,3 +22,6 @@ build/
 # Output
 /bin
 /lib
+
+# Doxygen generated
+/doc/html

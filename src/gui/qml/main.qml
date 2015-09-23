@@ -7,8 +7,8 @@ import de.nisble 1.0
 Window {
     title: "SevenSegmentDisplay-Demo"
     visible: true
-    width: 600
-    height: 500
+    width: 750
+    height: 400
 
     Row {
         id: leftControlPane
@@ -30,7 +30,7 @@ Window {
             font.pointSize: 12
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
-            text: "Digit size"
+            text: qsTr("Digit size")
         }
 
         Slider {
@@ -53,7 +53,7 @@ Window {
             font.pointSize: 12
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
-            text: "Digit count"
+            text: qsTr("Digit count")
         }
 
         Slider {
@@ -80,7 +80,7 @@ Window {
             font.pointSize: 12
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
-            text: "Precision"
+            text: qsTr("Precision")
         }
 
         Slider {
@@ -106,6 +106,7 @@ Window {
     }
 
     Rectangle {
+        id: displayBorder
         anchors {
             top: parent.top
             bottom: parent.bottom
@@ -117,6 +118,14 @@ Window {
             color: "black"
             width: 1
         }
+        Timer {
+            id: tBlink
+            interval: 250
+            onTriggered: {
+                displayBorder.border.color = "black"
+                displayBorder.border.width = 1
+            }
+        }
 
         SevenSegmentDisplay {
             id: display
@@ -124,15 +133,19 @@ Window {
             digitSize: 200 * sliderDigitSize.value
             digitCount: sliderDigitCount.value
             precision: sliderPrecision.value
-            bgColor: ccBgColor.currentColor
-            onColor: ccOnColor.currentColor
-            offColor: ccOffColor.currentColor
+            bgColor: ccBgColor.color
+            onColor: ccOnColor.color
+            offColor: ccOffColor.color
             verticalAlignment: SevenSegmentDisplay.AlignCenter
             horizontalAlignment: SevenSegmentDisplay.AlignCenter
 
             value: -3.14
-            //            string: "AF"
-            onOverflow: console.log("digit: overflow")
+            onOverflow: {
+                console.log("digit: Overflow")
+                displayBorder.border.color = "red"
+                displayBorder.border.width = 3
+                tBlink.restart()
+            }
         }
     }
 
@@ -144,7 +157,7 @@ Window {
             right: parent.right
             margins: 5
         }
-        width: Math.max(gbColor.width, gbValue.width)
+        width: 150
 
         Column {
             anchors.fill: parent
@@ -152,103 +165,75 @@ Window {
 
             spacing: 10
 
+            Label {
+                width: parent.width
+                text: qsTr("Options")
+                font.bold: true
+            }
+
             GroupBox {
                 id: gbColor
-                anchors.horizontalCenter: parent.horizontalCenter
-
-                title: "Color"
-
-                Column {
-                    spacing: 10
-
-                    Button {
-                        id: btBgColor
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: "Background"
-                        onClicked: ccBgColor.open()
-                    }
-                    Button {
-                        id: btOnColor
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: "Enabled"
-                        onClicked: ccOnColor.open()
-                    }
-                    Button {
-                        id: btOffColor
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: "Disabled"
-                        onClicked: ccOffColor.open()
-                    }
-                }
-            } // GroupBox
-
-            GroupBox {
-                id: gbValue
-                anchors.horizontalCenter: parent.horizontalCenter
-
-                title: "Value"
+                width: parent.width
 
                 Column {
                     anchors.fill: parent
                     spacing: 10
 
-                    ExclusiveGroup {
-                        id: inputChooser
+                    ColorChooser {
+                        id: ccBgColor
+                        width: parent.width
+                        text: qsTr("Background:")
                     }
-                    RadioButton {
-                        text: "Manual"
-                        checked: true
-                        exclusiveGroup: inputChooser
+
+                    ColorChooser {
+                        id: ccOnColor
+                        width: parent.width
+                        text: qsTr("Enabled:")
+                        color: "black"
                     }
-                    RadioButton {
-                        text: "Timer"
-                        checked: false
-                        exclusiveGroup: inputChooser
+
+                    ColorChooser {
+                        id: ccOffColor
+                        width: parent.width
+                        text: qsTr("Disabled:")
                     }
                 }
             } // GroupBox
+
+            TabView {
+                id: tabView
+                width: parent.width
+                Tab {
+                    id: tabTimer
+                    active: true
+                    title: qsTr("Timer")
+                    Item {
+                        TimerControl {
+                            anchors.fill: parent
+                            digitCount: sliderDigitCount.value
+                            precision: sliderPrecision.value
+                            onTick: display.value = value
+                        }
+                    }
+                }
+                Tab {
+                    id: tabManual
+                    active: true
+                    title: qsTr("Manual")
+                    Item {
+                        TextField {
+                            anchors {
+                                left: parent.left
+                                right: parent.right
+                                top: parent.top
+                                margins: 5
+                            }
+                            placeholderText: qsTr("Enter value")
+                            onTextChanged: display.string = text
+                        }
+                    }
+                }
+            } // TabView
         } // Column
     } // rightControlPane
-
-    ColorDialog {
-        id: ccBgColor
-        property color backup: "transparent"
-        title: "Choose the background color"
-        showAlphaChannel: true
-        color: "transparent"
-        onAccepted: backup = color
-        onRejected: display.bgColor = ccBgColor.backup
-    }
-
-    ColorDialog {
-        id: ccOnColor
-        property color backup: "transparent"
-        title: "Choose the color for enabled segments"
-        showAlphaChannel: true
-        color: "black"
-        onAccepted: backup = color
-        onRejected: display.onColor = ccOnColor.backup
-    }
-
-    ColorDialog {
-        id: ccOffColor
-        property color backup: "transparent"
-        title: "Choose the color for disabled segments"
-        showAlphaChannel: true
-        color: "transparent"
-        onAccepted: backup = color
-        onRejected: display.offColor = ccOffColor.backup
-    }
-
-    Timer {
-        id: timer
-        interval: 1000
-        repeat: true
-        running: true
-        property int i: 0
-        onTriggered: {
-            i = (i + 1) % Math.pow(10, display.digitCount)
-            display.value = i
-        }
-    }
 }

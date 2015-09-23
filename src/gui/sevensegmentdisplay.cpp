@@ -108,8 +108,6 @@ QString SevenSegmentDisplay::getString() const { Q_D(const SevenSegmentDisplay);
 void SevenSegmentDisplay::setString(QString string)
 {
 	Q_D(SevenSegmentDisplay);
-
-	// TODO: Check if string is printable or is it the responsibility of the node?
 	if (d->display(QVariant(string)))
 	{
 		update();

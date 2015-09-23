@@ -12,7 +12,7 @@
 
 #include <memory>
 #include <algorithm>
-#include <array>
+#include <vector>
 #include <cmath>
 
 #include <QSGGeometryNode>
@@ -36,7 +36,6 @@ Q_CONSTEXPR quint8 lutSegCode[] =
 } // namespace
 
 /** \internal Common base class for scene graph nodes. */
-template<int count>
 class ElementNode: public QSGGeometryNode
 {
 public:
@@ -51,8 +50,10 @@ public:
 		markDirty(QSGNode::DirtyMaterial);
 	}
 	/** \internal Update the geometry by mapping all vertices into the coordinate system of the given matrix. */
-	inline void updateGeometry(const QMatrix& mat)
+	void updateGeometry(const QMatrix& mat)
 	{
+		Q_ASSERT(static_cast<size_t>(mGeometry->vertexCount()) == mVertices.size());
+
 		bool dirty = false;
 		QSGGeometry::Point2D* data = mGeometry->vertexDataAsPoint2D();
 		for (int i = 0; i < mGeometry->vertexCount(); ++i)
@@ -79,17 +80,17 @@ public:
 		return QPointF();
 	}
 protected:
-	std::array<QPointF, count> mVertices;
+	std::vector<QPointF> mVertices;
 	std::unique_ptr<QSGGeometry> mGeometry;
 	std::unique_ptr<QSGFlatColorMaterial> mMaterial;
 };
 
 /** \internal Scene graph geometry node of a single segment. */
-struct SegmentNode: public ElementNode<6>
+struct SegmentNode: public ElementNode
 {
 	explicit SegmentNode(qreal deg = 0)
 	{
-		mGeometry = std::unique_ptr<QSGGeometry>(new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), mVertices.size()));
+		mGeometry = std::unique_ptr<QSGGeometry>(new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), 6));
 		mGeometry->setDrawingMode(GL_TRIANGLE_STRIP);
 		setGeometry(mGeometry.get());
 		mMaterial = std::unique_ptr<QSGFlatColorMaterial>(new QSGFlatColorMaterial);
@@ -101,12 +102,12 @@ struct SegmentNode: public ElementNode<6>
 		 * v0               v5
 		 *   \v1---------v3/
 		 * */
-		mVertices[0] = { -baseSegLength / 2, 0};
-		mVertices[1] = { -baseSegLength / 2 + baseSegWidth / 2, baseSegWidth / 2};
-		mVertices[2] = { -baseSegLength / 2 + baseSegWidth / 2, -baseSegWidth / 2};
-		mVertices[3] = {baseSegLength / 2 - baseSegWidth / 2, baseSegWidth / 2};
-		mVertices[4] = {baseSegLength / 2 - baseSegWidth / 2, -baseSegWidth / 2};
-		mVertices[5] = {baseSegLength / 2, 0};
+		mVertices.push_back(QPointF(-baseSegLength / 2, 0));
+		mVertices.push_back(QPointF( -baseSegLength / 2 + baseSegWidth / 2, baseSegWidth / 2));
+		mVertices.push_back(QPointF( -baseSegLength / 2 + baseSegWidth / 2, -baseSegWidth / 2));
+		mVertices.push_back(QPointF(baseSegLength / 2 - baseSegWidth / 2, baseSegWidth / 2));
+		mVertices.push_back(QPointF(baseSegLength / 2 - baseSegWidth / 2, -baseSegWidth / 2));
+		mVertices.push_back(QPointF(baseSegLength / 2, 0));
 
 		if (deg)
 		{
@@ -118,21 +119,21 @@ struct SegmentNode: public ElementNode<6>
 };
 
 /** \internal Scene graph geometry node of a dot. */
-struct DotNode: public ElementNode < dotSegs + 2 >
+struct DotNode: public ElementNode
 {
 	DotNode()
 	{
-		mGeometry = std::unique_ptr<QSGGeometry>(new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), mVertices.size()));
+		mGeometry = std::unique_ptr<QSGGeometry>(new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), dotSegs + 2));
 		mGeometry->setDrawingMode(GL_TRIANGLE_FAN);
 		setGeometry(mGeometry.get());
 		mMaterial = std::unique_ptr<QSGFlatColorMaterial>(new QSGFlatColorMaterial);
 		setMaterial(mMaterial.get());
 
-		mVertices[0] = { 0, 0};
-		mVertices[1] = { baseDotRadius, 0};
+		mVertices.push_back(QPointF( 0, 0));
+		mVertices.push_back(QPointF( baseDotRadius, 0));
 		QMatrix m = QMatrix().rotate(360 / dotSegs);
 		for (int i = 2; i < dotSegs + 2; ++i)
-			mVertices[i] = m.map(mVertices[i - 1]);
+			mVertices.push_back(m.map(mVertices[i - 1]));
 	}
 };
 
@@ -175,45 +176,45 @@ struct DigitNode: public QSGNode
 		// ->       hScaling, vShearing, hShearing,  vScaling,   hTrans,   vTrans
 
 		// (A) top
-		static_cast<SegmentNode*>(childAtIndex(0))->updateGeometry(QMatrix(scale, 0, 0, scale, digitCenterX,
+		static_cast<ElementNode*>(childAtIndex(0))->updateGeometry(QMatrix(scale, 0, 0, scale, digitCenterX,
 		        digitCenterY - segLength - segGap * 2));
 		// (B) top right
-		static_cast<SegmentNode*>(childAtIndex(1))->updateGeometry(QMatrix(scale, 0, 0, scale,
+		static_cast<ElementNode*>(childAtIndex(1))->updateGeometry(QMatrix(scale, 0, 0, scale,
 		        digitCenterX + segLength / 2 + segGap, digitCenterY - segLength / 2 - segGap));
 		// (C) bottom right
-		static_cast<SegmentNode*>(childAtIndex(2))->updateGeometry(QMatrix(scale, 0, 0, scale,
+		static_cast<ElementNode*>(childAtIndex(2))->updateGeometry(QMatrix(scale, 0, 0, scale,
 		        digitCenterX + segLength / 2 + segGap, digitCenterY + segLength / 2 + segGap));
 		// (D) bottom
-		static_cast<SegmentNode*>(childAtIndex(3))->updateGeometry(QMatrix(scale, 0, 0, scale, digitCenterX,
+		static_cast<ElementNode*>(childAtIndex(3))->updateGeometry(QMatrix(scale, 0, 0, scale, digitCenterX,
 		        digitCenterY + segLength + segGap * 2));
 		// (E) bottom left
-		static_cast<SegmentNode*>(childAtIndex(4))->updateGeometry(QMatrix(scale, 0, 0, scale,
+		static_cast<ElementNode*>(childAtIndex(4))->updateGeometry(QMatrix(scale, 0, 0, scale,
 		        digitCenterX - segLength / 2 - segGap, digitCenterY + segLength / 2 + segGap));
 		// (F) top left
-		static_cast<SegmentNode*>(childAtIndex(5))->updateGeometry(QMatrix(scale, 0, 0, scale,
+		static_cast<ElementNode*>(childAtIndex(5))->updateGeometry(QMatrix(scale, 0, 0, scale,
 		        digitCenterX - segLength / 2 - segGap, digitCenterY - segLength / 2 - segGap));
 		// (G) middle
-		static_cast<SegmentNode*>(childAtIndex(6))->updateGeometry(QMatrix(scale, 0, 0, scale, digitCenterX, digitCenterY));
+		static_cast<ElementNode*>(childAtIndex(6))->updateGeometry(QMatrix(scale, 0, 0, scale, digitCenterX, digitCenterY));
 
 		// The dot is always laid out. Appearance is controlled by color.
-		static_cast<DotNode*>(childAtIndex(7))->updateGeometry(QMatrix(scale, 0, 0, scale,
+		static_cast<ElementNode*>(childAtIndex(7))->updateGeometry(QMatrix(scale, 0, 0, scale,
 		        digitCenterX + segLength / 2 + segGap + segWidth / 2 + dotRadius +
 		        segGap, digitCenterY + segLength + 2 * segGap + segWidth / 2 - dotRadius));
 
 #if 0
-		qDebug() << "Effective digit size:" << static_cast<SegmentNode*>(childAtIndex(3))->getEffectiveVertex(
-		             1).y() - static_cast<SegmentNode*>(childAtIndex(0))->getEffectiveVertex(
+		qDebug() << "Effective digit size:" << static_cast<ElementNode*>(childAtIndex(3))->getEffectiveVertex(
+		             1).y() - static_cast<ElementNode*>(childAtIndex(0))->getEffectiveVertex(
 		             2).y();
 #endif
 	}
 
-	/* These digits and other symbols can be shown: 0/O, 1, 2, 3, 4, 5/S, 6, 7, 8, 9/g, minus, decimal point,
+	/* From QLCDNumber:
+	 * These digits and other symbols can be shown: 0/O, 1, 2, 3, 4, 5/S, 6, 7, 8, 9/g, minus, decimal point,
 	 * A, B, C, D, E, F, h, H, L, o, P, r, u, U, Y, colon, degree sign
 	 * (which is specified as single quote in the string) and space. */
-	inline void display(const QChar c, const QColor& onColor, const QColor& offColor)
+	inline void display(const QChar c, const QColor& onColor, const QColor& offColor, bool dot = false)
 	{
 		Q_ASSERT(8 == childCount());
-
 
 		if (c.isDigit()) // Digit: 0-9
 		{
@@ -222,36 +223,29 @@ struct DigitNode: public QSGNode
 			for (quint8 i = 0; i < 7; ++i)
 			{
 				/* Segment material is only marked dirty, when color is changed. */
-				static_cast<SegmentNode*>(childAtIndex(i))->setColor((code & mask) ? onColor : offColor);
+				static_cast<ElementNode*>(childAtIndex(i))->setColor((code & mask) ? onColor : offColor);
 				mask = mask << 1;
 			}
 		}
 		else
 		{
 			// Disable all
-			for (quint8 i = 0; i < 7; ++i)
-			{
-				static_cast<SegmentNode*>(childAtIndex(i))->setColor(offColor);
-			}
+			clear(offColor);
 
 			if (c == '-')
-				static_cast<SegmentNode*>(childAtIndex(6))->setColor(onColor);
-			else if(c == '.')
-			{
-				// Enable dot in previous sibling
-				DigitNode* pre = static_cast<DigitNode*>(previousSibling());
-				if(pre)
-					static_cast<DotNode*>(pre->lastChild())->setColor(onColor);
-			}
+				static_cast<ElementNode*>(childAtIndex(6))->setColor(onColor);
+
+			// TODO: Add other printable symbols
 		}
 
-		// Disable dot
-		static_cast<DotNode*>(lastChild())->setColor(offColor);
+		// Dot
+		static_cast<ElementNode*>(lastChild())->setColor(dot ? onColor : offColor);
 	}
 
-	inline void enableDot(const QColor& onColor)
+	inline void clear(const QColor& offColor)
 	{
-		static_cast<DotNode*>(lastChild())->setColor(onColor);
+		for (quint8 i = 0; i < childCount(); ++i)
+			static_cast<ElementNode*>(childAtIndex(i))->setColor(offColor);
 	}
 
 	static Q_DECL_CONSTEXPR qreal width()
@@ -272,6 +266,7 @@ public:
 		if (digitCount == mDigitCount)
 			return false;
 
+		/* TODO: Add automatically adjusting digit count (on invalid value e.g. negative or ?zero?) */
 		mDigitCount = digitCount;
 		return true;
 	}
@@ -280,16 +275,13 @@ public:
 	inline bool setString(QString string)
 	{
 		// Detect overflow; and fill leading digits with ' '
-		// TODO: Maybe use QRegExp("[\.,]")
-		int dots = string.count('.');
-		if (dots)
-			qDebug() << "Dots found:" << dots;
-
-		if (string.size() < mDigitCount + dots)
-			string = string.right(mDigitCount + dots).rightJustified(mDigitCount + dots, QLatin1Char(' '));
-		else if (string.size() > mDigitCount + dots)
+		// TODO: Maybe use QRegExp("[\.,]") to detect comma as decimal point?
+		int dot = string.count('.');
+		if (string.size() < mDigitCount + dot)
+			string = string.right(mDigitCount + dot).rightJustified(mDigitCount + dot, QLatin1Char(' '));
+		else if (string.size() > mDigitCount + dot)
 		{
-			string = string.left(mDigitCount + dots);
+			string = string.left(mDigitCount + dot);
 			emit overflow();
 		}
 
@@ -458,17 +450,22 @@ public:
 
 		if (mSegmentsDirty)
 		{
-			qDebug() << "Display (" << mDigitCount << "):" << mString;
-			for (int i = 0, k = 0; i < mDigitCount && k < mString.size(); ++i, ++k)
+			qDebug() << "Raw string" << mString;
+
+			int i = mString.size() -1;
+			int j = mDigitCount - 1;
+			while(i >= 0 && j >= 0)
 			{
-				if (mString[k].toLatin1() == '.')
+				bool dot = false;
+				while(mString[i].toLatin1() == '.')
 				{
-					Q_ASSERT(i > 0);
-					static_cast<DigitNode*>(childAtIndex(i - 1))->enableDot(mOnColor);
-					++k;
+					dot = true;
+					--i;
 				}
 
-				static_cast<DigitNode*>(childAtIndex(i))->display(mString[k].toLatin1(), mOnColor, mOffColor);
+				static_cast<DigitNode*>(childAtIndex(j))->display(mString[i].toLatin1(), mOnColor, mOffColor, dot);
+				--i;
+				--j;
 			}
 		}
 

@@ -13,15 +13,12 @@
 
 class SevenSegmentDisplayPrivate;
 
-/**
- * QQuick widget that implements a seven-segment display.
- */
+/** QQuick widget that implements a seven-segment display. */
 class SevenSegmentDisplay : public QQuickItem
 {
     Q_OBJECT
 
-	/** Property that controls the count of digits.
-	 * TODO: Automatically adjust the digit count, when value is invalid (e.g. negative or ?zero?) */
+	/** Property that controls the count of digits. */
 	Q_PROPERTY(int digitCount READ getDigitCount WRITE setDigitCount NOTIFY digitCountChanged)
 
 	/** Property that controls the current value shown by the widget. */
@@ -46,11 +43,12 @@ class SevenSegmentDisplay : public QQuickItem
 	Q_PROPERTY(QColor offColor READ getOffColor WRITE setOffColor NOTIFY offColorChanged)
 
 public:
+	/** Alignment options. */
 	enum Alignment
 	{
-		AlignLeft,
-		AlignTop,
-		AlignCenter,
+		AlignLeft,  //!< AlignLeft
+		AlignTop,   //!< AlignTop
+		AlignCenter,//!< AlignCenter
 	};
 
     SevenSegmentDisplay(QQuickItem* parent = nullptr);
@@ -98,6 +96,7 @@ signals:
 	void onColorChanged();
 	void offColorChanged();
 
+	/** Emitted on value overflow or when passed string need more literals than configured in digitCount. */
 	void overflow();
 
 protected:
