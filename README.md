@@ -17,7 +17,7 @@ The following picture shows the included demo program. As you may see, the widge
 ## Linux
 Assuming that you are in the root folder of the project, the following line should build and execute the demo.
 ```
-$ mkdir build && cd build && cmake ../.. && make && ./SevenSegmentDisplayDemo
+$ mkdir build && cd build && cmake .. && make && ./SevenSegmentDisplayDemo
 ```
 
 ## Windows
