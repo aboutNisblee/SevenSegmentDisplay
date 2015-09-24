@@ -3,10 +3,10 @@
 
 [X] Complete the demo pane.
 
-[ ]	Add Readme.md.
+[X]	Add Readme.md.
 
-[ ] Change license to LGPL.
-[ ]	Add license text to all files.
+[X] Change license to LGPL.
+[X]	Add license text to all files.
 
 [ ]	Add plugin code.
 [ ]	Make example from main.cpp.
